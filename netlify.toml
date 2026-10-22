@@ -1,0 +1,3 @@
+[build]
+  command = "npm run build:shared && npm --workspace @guardbot/web run build"
+  publish = "apps/web/.next"

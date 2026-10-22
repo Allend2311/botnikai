@@ -1,0 +1,2 @@
+ALTER TABLE "GuildSettings"
+ADD COLUMN "livePingUser" BOOLEAN NOT NULL DEFAULT true;

@@ -1,0 +1,52 @@
+{
+  "name": "guardbot",
+  "version": "1.0.0",
+  "private": true,
+  "description": "GuardBot - Discord moderation bot with a companion web dashboard",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run build:shared && concurrently -n bot,web -c cyan,magenta \"npm:dev:bot\" \"npm:dev:web\"",
+    "dev:bot": "npm run dev -w @guardbot/bot",
+    "dev:web": "npm run dev -w @guardbot/web",
+    "build": "npm run build:shared && npm run build:bot && npm run build:web",
+    "build:shared": "npm run build -w @guardbot/shared",
+    "build:bot": "npm run build -w @guardbot/bot",
+    "build:web": "npm run build -w @guardbot/web",
+    "start": "concurrently -n bot,web -c cyan,magenta \"npm:start:bot\" \"npm:start:web\"",
+    "start:bot": "npm run start -w @guardbot/bot",
+    "start:web": "npm run start -w @guardbot/web",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:status": "prisma migrate status",
+    "db:check": "tsx prisma/check.ts",
+    "db:password": "tsx prisma/set-password.ts",
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio",
+    "db:seed": "tsx prisma/seed.ts",
+    "deploy:commands": "npm run deploy:commands -w @guardbot/bot",
+    "typecheck": "npm run typecheck -w @guardbot/bot && npm run typecheck -w @guardbot/web"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "prisma": "^6.1.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.1.0",
+    "dotenv-expand": "^12.0.3"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "allowScripts": {
+    "prisma@6.19.3": true,
+    "@prisma/client@6.19.3": true,
+    "@prisma/engines@6.19.3": true,
+    "esbuild@0.28.2": true
+  }
+}

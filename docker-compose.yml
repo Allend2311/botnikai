@@ -1,0 +1,40 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: false
+
+  # Optional local PostgreSQL. The production database is Supabase (see .env),
+  # this instance is only useful for local development and for creating
+  # migrations with `npm run db:migrate` (which needs a shadow database).
+  postgres:
+    image: postgres:16-alpine
+    profiles: ["postgres"]
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: guardbot
+      POSTGRES_PASSWORD: guardbot
+      POSTGRES_DB: guardbot
+    ports:
+      - "5432:5432"
+    volumes:
+      - guardbot-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U guardbot -d guardbot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  guardbot-postgres:

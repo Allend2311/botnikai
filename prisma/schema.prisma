@@ -1,0 +1,277 @@
+// GuardBot data model.
+//
+// PostgreSQL (Supabase) is the database. Prisma `enum`s are supported here,
+// but the "enum-like" columns stay `String`s on purpose: the bot and the
+// website share the constants from `@guardbot/shared`, so a value that is not
+// in the list is simply ignored instead of crashing the whole query.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Website accounts (Discord OAuth2)
+// ---------------------------------------------------------------------------
+
+model User {
+  id         String    @id @default(cuid())
+  discordId  String    @unique
+  username   String
+  globalName String?
+  avatar     String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  sessions   Session[]
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken  String
+  refreshToken String?
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Guilds + settings
+// ---------------------------------------------------------------------------
+
+model Guild {
+  id          String   @id // discord guild id
+  name        String
+  icon        String?
+  ownerId     String
+  memberCount Int      @default(0)
+  addedAt     DateTime @default(now())
+  syncedAt    DateTime @updatedAt
+}
+
+model GuildSettings {
+  guildId String @id
+
+  // Logging
+  modLogChannelId       String?
+  ticketLogChannelId    String?
+  activityLogChannelId  String?
+  locale                String  @default("en-US")
+
+  // Welcome / farewell
+  welcomeEnabled     Boolean @default(false)
+  welcomeChannelId   String?
+  welcomeMessage     String  @default("Welcome {user} to {server}! You are member #{membercount}.")
+  welcomeImageUrl    String?
+  welcomeDmMessage   String?
+  dmOnJoin           Boolean @default(false)
+  autoRoleIds        String  @default("[]") // JSON string[]
+  goodbyeEnabled     Boolean @default(false)
+  goodbyeChannelId   String?
+  goodbyeMessage     String  @default("{user} just left the server.")
+  goodbyeImageUrl    String?
+  roleRequestRoleId  String?
+
+  // Live / streaming announcements
+  liveEnabled       Boolean @default(false)
+  liveChannelId     String?
+  liveRoleId        String?
+  livePingUser      Boolean @default(true)
+  liveMode          String  @default("both") // live | streaming | both
+  liveAnnounceEnd   Boolean @default(false)
+  liveIncludeUrl    Boolean @default(true)
+
+  // New post announcements
+  postEnabled         Boolean @default(false)
+  postForumChannelId  String?
+  postWatchChannelId  String?
+  postChannelId       String?
+  postRoleId          String?
+  postPingAuthor      Boolean @default(true)
+  postIncludeContent  Boolean @default(true)
+
+  updatedAt DateTime @updatedAt
+}
+
+model AutomodConfig {
+  guildId String @id
+
+  enabled Boolean @default(false)
+
+  blockInvites       Boolean @default(true)
+  blockExternalLinks Boolean @default(false)
+  allowedDomains     String  @default("[]") // JSON string[]
+  maxCapsPercent     Int     @default(50)
+  blockCaps          Boolean @default(false)
+  spamMaxMessages    Int     @default(5)
+  spamWindowSeconds  Int     @default(7)
+  bannedWords        String  @default("[]") // JSON string[]
+  ignoreChannels     String  @default("[]") // JSON string[]
+  ignoreRoles        String  @default("[]") // JSON string[]
+
+  actionLink  String @default("DELETE")
+  actionSpam  String @default("DELETE")
+  actionWord  String @default("DELETE")
+  actionCaps  String @default("DELETE")
+
+  warnLimit       Int @default(3)
+  timeoutMinutes  Int @default(10)
+
+  updatedAt DateTime @updatedAt
+}
+
+model ReactionRole {
+  id        String   @id @default(cuid())
+  guildId   String
+  channelId String
+  emoji     String
+  roleId    String
+  label     String?
+  createdAt DateTime @default(now())
+
+  @@index([guildId, channelId])
+}
+
+model RoleRequest {
+  id             String   @id @default(cuid())
+  guildId        String
+  applicantId    String
+  applicantName  String
+  inGameName     String
+  voucherId      String
+  voucherName    String
+  evidenceUrl    String?
+  roleId         String?
+  status         String   @default("PENDING_VOUCH")
+  decidedBy      String?
+  decidedAt      DateTime?
+  createdAt      DateTime @default(now())
+
+  @@index([guildId, status, createdAt])
+  @@index([guildId, applicantId, status])
+}
+
+model LiveStreamAccount {
+  id        String   @id @default(cuid())
+  guildId   String
+  platform  String
+  username  String
+  createdAt DateTime @default(now())
+
+  @@unique([guildId, platform, username])
+  @@index([guildId, createdAt])
+}
+
+model WelcomeImage {
+  id        String   @id @default(cuid())
+  guildId   String
+  imageType String
+  mimeType  String
+  data      Bytes
+  createdAt DateTime @default(now())
+
+  @@index([guildId, imageType, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Moderation
+// ---------------------------------------------------------------------------
+
+model Warning {
+  id          String   @id @default(cuid())
+  guildId     String
+  userId      String
+  reason      String
+  moderatorId String
+  createdAt   DateTime @default(now())
+
+  @@index([guildId, userId])
+}
+
+model Case {
+  id         String   @id @default(cuid())
+  caseNumber Int
+  guildId    String
+  type       String // CaseType
+  targetId   String
+  targetTag  String?
+  moderatorId String
+  reason     String
+  durationMs Int?
+  meta       String? // JSON payload for extra context
+  createdAt  DateTime @default(now())
+
+  @@unique([guildId, caseNumber])
+  @@index([guildId, createdAt])
+}
+
+model LogEntry {
+  id        String   @id @default(cuid())
+  guildId   String
+  type      String
+  message   String
+  createdAt DateTime @default(now())
+
+  @@index([guildId, createdAt])
+}
+
+model CommandStat {
+  id      String @id @default(cuid())
+  guildId String
+  name    String
+  count   Int    @default(0)
+
+  @@unique([guildId, name])
+}
+
+// ---------------------------------------------------------------------------
+// Tickets
+// ---------------------------------------------------------------------------
+
+model TicketPanel {
+  id           String   @id @default(cuid())
+  guildId      String
+  channelId    String
+  messageId    String
+  title        String
+  description  String?
+  categoryId   String?
+  supportRoleId String?
+  maxOpenPerUser Int   @default(1)
+  createdAt    DateTime @default(now())
+
+  @@index([guildId])
+}
+
+model Ticket {
+  id        String   @id @default(cuid())
+  guildId   String
+  panelId   String?
+  channelId String
+  userId    String
+  subject   String
+  status    String   @default("OPEN") // OPEN | CLOSED
+  closedAt  DateTime?
+  closedBy  String?
+  createdAt DateTime @default(now())
+
+  @@index([guildId, status])
+  @@index([channelId])
+}
+
+model TicketTranscript {
+  id        String   @id @default(cuid())
+  ticketId  String
+  guildId   String
+  content   String
+  createdAt DateTime @default(now())
+
+  @@index([ticketId])
+}
