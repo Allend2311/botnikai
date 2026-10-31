@@ -1,8 +1,25 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { exchangeCode, getCurrentUser } from "@/lib/discord";
+import {
+  exchangeCode,
+  getAppUrlForRequest,
+  getCurrentUser,
+  getOAuthRedirectUri,
+} from "@/lib/discord";
 import { prisma } from "@/lib/prisma";
-import { createSession, OAUTH_STATE_COOKIE } from "@/lib/session";
+import {
+  createSession,
+  OAUTH_REDIRECT_COOKIE,
+  OAUTH_STATE_COOKIE,
+} from "@/lib/session";
+
+/**
+ * Sends the visitor back to the landing page with a short, non-sensitive error
+ * code. The real error is only written to the server logs.
+ */
+function fail(reason: string): never {
+  redirect(`/?error=oauth_failed&reason=${encodeURIComponent(reason)}`);
+}
 
 export async function GET(request: Request): Promise<never> {
   const url = new URL(request.url);
@@ -12,9 +29,12 @@ export async function GET(request: Request): Promise<never> {
 
   const store = await cookies();
   const storedState = store.get(OAUTH_STATE_COOKIE)?.value;
+  const storedRedirectUri = store.get(OAUTH_REDIRECT_COOKIE)?.value;
+
+  store.delete(OAUTH_STATE_COOKIE);
+  store.delete(OAUTH_REDIRECT_COOKIE);
 
   if (oauthError) {
-    store.delete(OAUTH_STATE_COOKIE);
     redirect("/?error=oauth_denied");
   }
 
@@ -22,12 +42,28 @@ export async function GET(request: Request): Promise<never> {
     redirect("/?error=oauth_state");
   }
 
-  store.delete(OAUTH_STATE_COOKIE);
+  // Prefer the URL captured at login time; fall back to the configured origin
+  // so older in-flight logins still complete.
+  const redirectUri =
+    storedRedirectUri ?? getOAuthRedirectUri(getAppUrlForRequest(request));
+
+  let token: Awaited<ReturnType<typeof exchangeCode>>;
+  try {
+    token = await exchangeCode(code, redirectUri);
+  } catch (error) {
+    console.error("[auth] Discord token exchange failed:", error);
+    fail("token_exchange");
+  }
+
+  let profile: Awaited<ReturnType<typeof getCurrentUser>>;
+  try {
+    profile = await getCurrentUser(token.access_token);
+  } catch (error) {
+    console.error("[auth] Could not load the Discord profile:", error);
+    fail("profile");
+  }
 
   try {
-    const token = await exchangeCode(code);
-    const profile = await getCurrentUser(token.access_token);
-
     const user = await prisma.user.upsert({
       where: { discordId: profile.id },
       update: {
@@ -49,8 +85,8 @@ export async function GET(request: Request): Promise<never> {
       refreshToken: token.refresh_token,
     });
   } catch (error) {
-    console.error("[auth] OAuth callback failed:", error);
-    redirect("/?error=oauth_failed");
+    console.error("[auth] Could not create the session:", error);
+    fail("session");
   }
 
   redirect("/dashboard");

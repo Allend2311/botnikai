@@ -1,5 +1,6 @@
 import { ActivityType, type Client } from "discord.js";
 import { logger } from "../lib/logger";
+import { registerGuildCommands } from "../lib/registerCommands";
 import { ensureGuild } from "../lib/settings";
 
 export async function onReady(client: Client): Promise<void> {
@@ -10,9 +11,15 @@ export async function onReady(client: Client): Promise<void> {
 
   for (const guild of client.guilds.cache.values()) {
     try {
+      await registerGuildCommands(guild.id);
+    } catch (error) {
+      logger.error("deploy", `Could not register commands in guild ${guild.id}: ${(error as Error).message}`, error);
+    }
+
+    try {
       await ensureGuild(guild.id, guild.name, guild.ownerId, guild.iconURL(), guild.memberCount);
     } catch (error) {
-      logger.warn("bot", `Could not sync guild ${guild.id}: ${(error as Error).message}`);
+      logger.warn("bot", `Could not sync guild ${guild.id}: ${(error as Error).message}`, error);
     }
   }
 

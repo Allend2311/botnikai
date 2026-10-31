@@ -1,0 +1,23 @@
+services:
+  - type: worker
+    name: kai-bot
+    runtime: node
+    buildCommand: npm run build:shared && npm run db:generate && npm run build:bot
+    startCommand: npm run start:bot
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DISCORD_TOKEN
+        sync: false
+      - key: DISCORD_CLIENT_ID
+        sync: false
+      - key: DISCORD_CLIENT_SECRET
+        sync: false
+      - key: DISCORD_APPLICATION_ID
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: APP_URL
+        sync: false

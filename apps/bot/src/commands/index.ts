@@ -7,6 +7,8 @@ import { postCommands } from "./posts";
 import { utilityCommands } from "./utility";
 import { roleRequestCommands } from "./roleRequests";
 import { announcementCommands } from "./announcement";
+import { broadcastCommands } from "./broadcast";
+import { configCommands } from "./config";
 
 export const commands: Command[] = [
   ...moderationCommands,
@@ -16,6 +18,8 @@ export const commands: Command[] = [
   ...postCommands,
   ...roleRequestCommands,
   ...announcementCommands,
+  ...configCommands,
+  ...broadcastCommands,
   ...utilityCommands,
 ];
 

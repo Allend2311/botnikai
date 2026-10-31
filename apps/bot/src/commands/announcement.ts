@@ -28,6 +28,16 @@ export const announcementCommand: Command = {
             .setRequired(true)
             .setMaxLength(1500),
         )
+        .addBooleanOption((option) =>
+          option
+            .setName("ping-everyone")
+            .setDescription("Mention @everyone in the announcement"),
+        )
+        .addBooleanOption((option) =>
+          option
+            .setName("ping-here")
+            .setDescription("Mention @here in the announcement"),
+        )
         .addAttachmentOption((option) =>
           option.setName("image").setDescription("Optional image or GIF attachment"),
         )
@@ -44,9 +54,21 @@ export const announcementCommand: Command = {
   async execute({ interaction, guild }) {
     if (!guild) return;
     const selectedChannel = interaction.options.getChannel("channel", true);
+    const pingEveryone = interaction.options.getBoolean("ping-everyone") ?? false;
+    const pingHere = interaction.options.getBoolean("ping-here") ?? false;
     const channel = await guild.channels.fetch(selectedChannel.id);
     if (!channel || !channel.isTextBased() || !("send" in channel)) {
       await interaction.editReply({ content: "Choose a text or announcement channel." });
+      return;
+    }
+
+    if (
+      (pingEveryone || pingHere) &&
+      !guild.members.me?.permissionsIn(channel).has(PermissionFlagsBits.MentionEveryone)
+    ) {
+      await interaction.editReply({
+        content: "The bot needs the Mention @everyone, @here, and All Roles permission in that channel.",
+      });
       return;
     }
 
@@ -89,7 +111,18 @@ export const announcementCommand: Command = {
       .setTimestamp();
     if (image) embed.setImage(image);
 
-    await channel.send({ embeds: [embed], allowedMentions: { parse: [] } });
+    const content = [
+      pingEveryone ? "@everyone" : "",
+      pingHere ? "@here" : "",
+    ].filter(Boolean).join(" ");
+
+    await channel.send({
+      content: content || undefined,
+      embeds: [embed],
+      allowedMentions: {
+        parse: pingEveryone || pingHere ? ["everyone"] : [],
+      },
+    });
     await interaction.editReply({ content: `Announcement sent to ${channel}.` });
   },
 };

@@ -1,15 +1,14 @@
 import { ChannelType, PermissionFlagsBits, SlashCommandBuilder } from "discord.js";
-import { LIVE_MODES, LIVE_MODE_LABELS, type LiveMode } from "@guardbot/shared";
 import { prisma } from "../lib/db";
 import { errorEmbed, successEmbed } from "../lib/embeds";
 import { invalidateConfigCache } from "../lib/settings";
-import { activityMatchesMode, announceLive, findLiveActivity } from "../services/live";
+import { announceLive, findLiveActivity } from "../services/live";
 import type { Command } from "../types";
 
 export const liveConfigCommand: Command = {
   data: new SlashCommandBuilder()
     .setName("liveconfig")
-    .setDescription("Configure the live / streaming notifications")
+    .setDescription("Configure Kick and TikTok live notifications")
     .addSubcommand((sub) =>
       sub
         .setName("channel")
@@ -30,17 +29,15 @@ export const liveConfigCommand: Command = {
     )
     .addSubcommand((sub) =>
       sub
-        .setName("mode")
-        .setDescription("Which kind of activity should be announced")
-        .addStringOption((option) =>
-          option
-            .setName("mode")
-            .setDescription("live | streaming | both")
-            .setRequired(true)
-            .addChoices(
-              ...LIVE_MODES.map((mode) => ({ name: LIVE_MODE_LABELS[mode], value: mode })),
-            ),
-        ),
+        .setName("everyone")
+        .setDescription("Toggle @everyone on live announcements")
+        .addBooleanOption((option) => option.setName("enabled").setDescription("Enable the ping").setRequired(true)),
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName("here")
+        .setDescription("Toggle @here on live announcements")
+        .addBooleanOption((option) => option.setName("enabled").setDescription("Enable the ping").setRequired(true)),
     )
     .addSubcommand((sub) => sub.setName("enable").setDescription("Enable the notifications"))
     .addSubcommand((sub) => sub.setName("disable").setDescription("Disable the notifications"))
@@ -75,11 +72,15 @@ export const liveConfigCommand: Command = {
       return;
     }
 
-    if (sub === "mode") {
-      const mode = interaction.options.getString("mode", true) as LiveMode;
-      await prisma.guildSettings.update({ where: { guildId: guild.id }, data: { liveMode: mode } });
+    if (sub === "everyone" || sub === "here") {
+      const enabled = interaction.options.getBoolean("enabled", true);
+      const field = sub === "everyone" ? "livePingEveryone" : "livePingHere";
+      await prisma.guildSettings.update({ where: { guildId: guild.id }, data: { [field]: enabled } });
       invalidateConfigCache(guild.id);
-      await interaction.reply({ embeds: [successEmbed("Mode updated", `Mode: ${LIVE_MODE_LABELS[mode]}`)], ephemeral: true });
+      await interaction.reply({
+        embeds: [successEmbed(`${sub === "everyone" ? "@everyone" : "@here"} ping ${enabled ? "enabled" : "disabled"}`)],
+        ephemeral: true,
+      });
       return;
     }
 
@@ -113,7 +114,8 @@ export const liveConfigCommand: Command = {
             { name: "Enabled", value: settings.liveEnabled ? "Yes" : "No", inline: true },
             { name: "Channel", value: settings.liveChannelId ? `<#${settings.liveChannelId}>` : "Not set", inline: true },
             { name: "Ping role", value: settings.liveRoleId ? `<@&${settings.liveRoleId}>` : "Not set", inline: true },
-            { name: "Mode", value: LIVE_MODE_LABELS[(settings.liveMode as LiveMode) ?? "both"] ?? "both", inline: true },
+            { name: "@everyone", value: settings.livePingEveryone ? "Enabled" : "Disabled", inline: true },
+            { name: "@here", value: settings.livePingHere ? "Enabled" : "Disabled", inline: true },
           ],
           footer: { text: "GuardBot" },
         },
@@ -126,7 +128,7 @@ export const liveConfigCommand: Command = {
 export const liveCheckCommand: Command = {
   data: new SlashCommandBuilder()
     .setName("livecheck")
-    .setDescription("Scan the server for members who are currently live")
+    .setDescription("Scan for members with detected Kick or TikTok streams")
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .setDMPermission(false),
   userPermissions: [PermissionFlagsBits.ManageGuild],
@@ -148,7 +150,6 @@ export const liveCheckCommand: Command = {
       return;
     }
 
-    const mode = (settings.liveMode as LiveMode) ?? "both";
     const members = await guild.members.fetch({ withPresences: true }).catch(() => null);
 
     if (!members) {
@@ -163,17 +164,26 @@ export const liveCheckCommand: Command = {
       return;
     }
 
+    const accounts = await prisma.liveStreamAccount.findMany({
+      where: { guildId: guild.id, platform: { in: ["Kick", "TikTok"] } },
+      select: { platform: true, username: true },
+    });
+
     let announced = 0;
     for (const member of members.values()) {
-      const activity = findLiveActivity(member.presence?.activities ?? []);
+      const activity = findLiveActivity(member.presence?.activities ?? [], accounts);
       if (!activity) continue;
-      if (!activityMatchesMode(activity, mode)) continue;
       const sent = await announceLive(guild, member, activity);
       if (sent) announced += 1;
     }
 
     await interaction.editReply({
-      embeds: [successEmbed("Live scan complete", `${announced} member(s) are live and were announced.`)],
+      embeds: [
+        successEmbed(
+          "Live scan complete",
+          `${announced} member(s) with a detected Kick or TikTok streaming activity were announced.`,
+        ),
+      ],
     });
   },
 };

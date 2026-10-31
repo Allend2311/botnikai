@@ -22,18 +22,22 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#05050a",
+  themeColor: "#04040a",
   width: "device-width",
   initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <body className="min-h-screen bg-ink-950 text-slate-200 antialiased">
-        <div className="pointer-events-none fixed inset-0 -z-10">
-          <div className="absolute inset-x-0 top-0 h-[520px] bg-[radial-gradient(60%_60%_at_50%_0%,rgba(99,102,241,0.28),transparent_70%)]" />
-          <div className="grid-bg absolute inset-x-0 top-0 h-[620px]" />
+        <div className="app-backdrop" aria-hidden="true">
+          <div className="app-glow app-glow-a" />
+          <div className="app-glow app-glow-b" />
+          <div className="app-glow app-glow-c" />
+          <div className="app-grid" />
+          <div className="app-noise" />
         </div>
         {children}
       </body>

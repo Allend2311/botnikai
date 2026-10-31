@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { redirect } from "next/navigation";
 import type { AutomodConfig, GuildSettings } from "@prisma/client";
 import {
   canManageGuild,
@@ -12,7 +13,7 @@ import {
   type DiscordRole,
 } from "./discord";
 import { prisma } from "./prisma";
-import { getSession } from "./session";
+import { getSession, SessionExpiredError, withAccessToken } from "./session";
 
 export const DEFAULT_SETTINGS: GuildSettings = {
   guildId: "",
@@ -36,6 +37,8 @@ export const DEFAULT_SETTINGS: GuildSettings = {
   liveEnabled: false,
   liveChannelId: null,
   liveRoleId: null,
+  livePingEveryone: false,
+  livePingHere: false,
   livePingUser: true,
   liveMode: "both",
   liveAnnounceEnd: false,
@@ -45,6 +48,8 @@ export const DEFAULT_SETTINGS: GuildSettings = {
   postWatchChannelId: null,
   postChannelId: null,
   postRoleId: null,
+  postPingEveryone: false,
+  postPingHere: false,
   postPingAuthor: true,
   postIncludeContent: true,
 };
@@ -87,10 +92,15 @@ export const getGuildContext = cache(
     const session = await getSession();
     if (!session) return null;
 
-    const guild = await getBotGuild(guildId);
+    const [guild, userGuilds] = await Promise.all([
+      getBotGuild(guildId),
+      withAccessToken(session, getUserGuilds).catch((error) => {
+        if (error instanceof SessionExpiredError) redirect("/?error=session_expired");
+        throw error;
+      }),
+    ]);
     if (!guild) return null;
 
-    const userGuilds = await getUserGuilds(session.accessToken);
     const userGuild = userGuilds.find((entry) => entry.id === guildId);
 
     const [channels, roles, settings, automod] = await Promise.all([

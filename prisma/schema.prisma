@@ -6,7 +6,11 @@
 // in the list is simply ignored instead of crashing the whole query.
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // native            -> local Windows/macOS development
+  // debian-openssl-3.x -> Render/Docker builds
+  // rhel-openssl-3.x   -> Netlify Functions (Amazon Linux runtime)
+  binaryTargets = ["native", "debian-openssl-3.0.x", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
@@ -83,6 +87,8 @@ model GuildSettings {
   liveEnabled       Boolean @default(false)
   liveChannelId     String?
   liveRoleId        String?
+  livePingEveryone  Boolean @default(false)
+  livePingHere      Boolean @default(false)
   livePingUser      Boolean @default(true)
   liveMode          String  @default("both") // live | streaming | both
   liveAnnounceEnd   Boolean @default(false)
@@ -94,6 +100,8 @@ model GuildSettings {
   postWatchChannelId  String?
   postChannelId       String?
   postRoleId          String?
+  postPingEveryone    Boolean @default(false)
+  postPingHere        Boolean @default(false)
   postPingAuthor      Boolean @default(true)
   postIncludeContent  Boolean @default(true)
 
@@ -148,6 +156,8 @@ model RoleRequest {
   voucherId      String
   voucherName    String
   evidenceUrl    String?
+  reviewChannelId String?
+  reviewMessageId String?
   roleId         String?
   status         String   @default("PENDING_VOUCH")
   decidedBy      String?
@@ -159,11 +169,11 @@ model RoleRequest {
 }
 
 model LiveStreamAccount {
-  id        String   @id @default(cuid())
-  guildId   String
-  platform  String
-  username  String
-  createdAt DateTime @default(now())
+  id                     String    @id @default(cuid())
+  guildId                String
+  platform               String
+  username               String
+  createdAt              DateTime  @default(now())
 
   @@unique([guildId, platform, username])
   @@index([guildId, createdAt])
@@ -229,6 +239,19 @@ model CommandStat {
   count   Int    @default(0)
 
   @@unique([guildId, name])
+}
+
+model MessageTemplate {
+  id                String   @id @default(cuid())
+  guildId           String
+  name              String
+  content           String   @default("") @db.Text
+  embedTitle        String?
+  embedDescription  String?  @db.Text
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([guildId, updatedAt])
 }
 
 // ---------------------------------------------------------------------------

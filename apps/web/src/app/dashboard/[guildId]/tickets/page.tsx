@@ -18,6 +18,7 @@ import { prisma } from "@/lib/prisma";
 import { Badge, Card, EmptyState, Field, Input, Textarea } from "@/components/ui";
 import { ChannelSelect, RoleSelect } from "@/components/selects";
 import { SubmitButton } from "@/components/submit-button";
+import { PageHeader } from "@/components/page-header";
 
 export const dynamic = "force-dynamic";
 
@@ -50,12 +51,11 @@ export default async function TicketsPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-white">Tickets</h1>
-        <p className="mt-1.5 text-sm text-slate-400">
-          Create support panels and follow every ticket that was opened in this server.
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="Support desk"
+        title="Tickets"
+        description="Create support panels and follow every ticket that was opened in this server."
+      />
 
       <Card
         title="Support panels"
@@ -158,43 +158,70 @@ export default async function TicketsPage({
             description="Tickets created from a support panel show up here."
           />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-white/5 text-xs uppercase tracking-wider text-slate-500">
-                  <th className="pb-3 pr-4 font-medium">Subject</th>
-                  <th className="pb-3 pr-4 font-medium">Status</th>
-                  <th className="pb-3 pr-4 font-medium">Channel</th>
-                  <th className="pb-3 pr-4 font-medium">Opened by</th>
-                  <th className="pb-3 font-medium">When</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {tickets.map((ticket) => (
-                  <tr key={ticket.id}>
-                    <td className="py-3 pr-4">
-                      <Link
-                        href={`/dashboard/${guildId}/tickets/${ticket.id}`}
-                        className="text-slate-200 hover:text-brand-300"
-                      >
-                        {ticket.subject}
-                      </Link>
-                    </td>
-                    <td className="py-3 pr-4">
-                      <Badge tone={ticket.status === "OPEN" ? "green" : "neutral"}>
-                        {ticket.status === "OPEN" ? "Open" : "Closed"}
-                      </Badge>
-                    </td>
-                    <td className="py-3 pr-4 font-mono text-xs text-slate-500">
-                      {ticket.channelId}
-                    </td>
-                    <td className="py-3 pr-4 font-mono text-xs text-slate-500">{ticket.userId}</td>
-                    <td className="py-3 text-xs text-slate-500">{relativeTime(ticket.createdAt)}</td>
+          <>
+            <ul className="space-y-2 sm:hidden">
+              {tickets.map((ticket) => (
+                <li
+                  key={ticket.id}
+                  className="rounded-xl border border-white/[0.06] bg-white/[0.018] px-3 py-3"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <Link
+                      href={`/dashboard/${guildId}/tickets/${ticket.id}`}
+                      className="min-w-0 flex-1 truncate text-xs font-medium text-slate-200 hover:text-brand-300"
+                    >
+                      {ticket.subject}
+                    </Link>
+                    <Badge tone={ticket.status === "OPEN" ? "green" : "neutral"}>
+                      {ticket.status === "OPEN" ? "Open" : "Closed"}
+                    </Badge>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between gap-3 font-mono text-[10px] text-slate-500">
+                    <span className="truncate">#{ticket.channelId}</span>
+                    <span className="shrink-0">{relativeTime(ticket.createdAt)}</span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+
+            <div className="hidden overflow-x-auto sm:block">
+              <table className="w-full min-w-[44rem] text-left text-sm">
+                <thead>
+                  <tr className="border-b border-white/5 text-[10px] uppercase tracking-wider text-slate-500">
+                    <th className="pb-3 pr-4 font-medium">Subject</th>
+                    <th className="pb-3 pr-4 font-medium">Status</th>
+                    <th className="pb-3 pr-4 font-medium">Channel</th>
+                    <th className="pb-3 pr-4 font-medium">Opened by</th>
+                    <th className="pb-3 font-medium">When</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {tickets.map((ticket) => (
+                    <tr key={ticket.id}>
+                      <td className="py-3 pr-4">
+                        <Link
+                          href={`/dashboard/${guildId}/tickets/${ticket.id}`}
+                          className="text-slate-200 hover:text-brand-300"
+                        >
+                          {ticket.subject}
+                        </Link>
+                      </td>
+                      <td className="py-3 pr-4">
+                        <Badge tone={ticket.status === "OPEN" ? "green" : "neutral"}>
+                          {ticket.status === "OPEN" ? "Open" : "Closed"}
+                        </Badge>
+                      </td>
+                      <td className="py-3 pr-4 font-mono text-xs text-slate-500">
+                        {ticket.channelId}
+                      </td>
+                      <td className="py-3 pr-4 font-mono text-xs text-slate-500">{ticket.userId}</td>
+                      <td className="py-3 text-xs text-slate-500">{relativeTime(ticket.createdAt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </Card>
 

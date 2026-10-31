@@ -64,7 +64,7 @@ export function CheckboxGrid({
       {options.map((option) => (
         <label
           key={option.value}
-          className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-white/5 bg-ink-950/40 px-3 py-2 text-sm transition hover:border-white/15"
+          className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-white/[0.06] bg-white/[0.018] px-3 py-2.5 text-sm transition hover:border-brand-400/20 hover:bg-brand-500/[0.035]"
         >
           <input
             type="checkbox"
@@ -73,7 +73,7 @@ export function CheckboxGrid({
             defaultChecked={defaultValues.includes(option.value)}
             className="h-4 w-4 shrink-0 rounded border-white/20 bg-ink-800 text-brand-600 focus:ring-brand-500/40"
           />
-          <span className="truncate text-slate-300">{option.label}</span>
+          <span className="truncate text-xs text-slate-300 sm:text-sm">{option.label}</span>
         </label>
       ))}
     </div>

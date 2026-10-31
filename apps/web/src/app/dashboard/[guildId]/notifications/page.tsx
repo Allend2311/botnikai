@@ -1,11 +1,9 @@
 import { notFound } from "next/navigation";
-import { LIVE_MODES, LIVE_MODE_LABELS, STREAM_PLATFORMS } from "@guardbot/shared";
+import { STREAM_PLATFORMS } from "@guardbot/shared";
 import {
   addLiveStreamAccount,
   removeLiveStreamAccount,
   saveNotifications,
-  testLivePing,
-  testPostPing,
 } from "@/app/actions";
 import {
   channelOptions,
@@ -17,11 +15,13 @@ import {
 import { Card, Field, Input, Select, Toggle } from "@/components/ui";
 import { ChannelSelect, RoleSelect } from "@/components/selects";
 import { SubmitButton } from "@/components/submit-button";
+import { PageHeader, StatusPill } from "@/components/page-header";
 import { prisma } from "@/lib/prisma";
+import { getSession } from "@/lib/session";
+import { isBotOwner } from "@/lib/owners";
 
 export const dynamic = "force-dynamic";
 
-const MODE_OPTIONS = LIVE_MODES.map((mode) => ({ value: mode, label: LIVE_MODE_LABELS[mode] }));
 const STREAM_PLATFORM_OPTIONS = STREAM_PLATFORMS.map((platform) => ({
   value: platform,
   label: platform,
@@ -50,6 +50,48 @@ export default async function NotificationsPage({
   const context = await getGuildContext(guildId);
   if (!context) notFound();
 
+  const session = await getSession();
+  const isOwner = await isBotOwner(session?.user.discordId);
+
+  if (!isOwner) {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          eyebrow="Broadcast"
+          title="Notifications"
+          description="Notify your community when Discord reports a member streaming on Kick or TikTok."
+          action={<StatusPill label="Coming soon" tone="cyan" />}
+        />
+
+        <Card>
+          <div className="flex flex-col items-center justify-center gap-5 py-14 text-center sm:py-20">
+            <span className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/[0.08] bg-gradient-to-br from-brand-500/20 to-cyan-500/10 text-brand-200 shadow-[0_0_30px_-12px_rgba(129,140,248,0.9)]">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="h-6 w-6"
+                aria-hidden="true"
+              >
+                <path d="M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16Zm0 4v4l3 2" />
+              </svg>
+            </span>
+            <div className="max-w-md">
+              <h2 className="text-lg font-semibold text-white">Coming soon</h2>
+              <p className="mt-2 text-sm leading-relaxed text-slate-400">
+                Live stream and new post notifications are still in development. They will be
+                available for your server soon.
+              </p>
+            </div>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
   const { settings, channels, roles } = context;
   const liveStreamAccounts = await prisma.liveStreamAccount.findMany({
     where: { guildId },
@@ -62,17 +104,22 @@ export default async function NotificationsPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-white">Notifications</h1>
-        <p className="mt-1.5 text-sm text-slate-400">
-          Ping your community when a member goes live or publishes a new post.
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="Broadcast"
+        title="Notifications"
+        description="Notify your community when Discord reports a member streaming on Kick or TikTok."
+        action={
+          <StatusPill
+            label={settings.liveEnabled || settings.postEnabled ? "Signals armed" : "Signals off"}
+            tone={settings.liveEnabled || settings.postEnabled ? "emerald" : "amber"}
+          />
+        }
+      />
 
       <form action={saveNotifications.bind(null, guildId)} className="space-y-6">
         <Card
-          title="Live & streaming announcements"
-          description="Posts an embed when somebody starts streaming."
+          title="Kick & TikTok live announcements"
+          description="Uses Discord's presence activity and only announces streams whose activity URL is on Kick or TikTok."
         >
           <div className="space-y-5">
             <Toggle
@@ -93,25 +140,33 @@ export default async function NotificationsPage({
             <RoleSelect
               name="liveRoleId"
               label="Ping role"
-              description="Optional. This role is pinged with every announcement."
+              description="Optional. The role can be pinged alongside @everyone and @here."
               options={roleSelect}
               defaultValue={settings.liveRoleId}
             />
 
-            <Toggle
-              name="livePingUser"
-              label="Ping the member who goes live"
-              description="Mentions the streamer in the announcement."
-              defaultChecked={settings.livePingUser}
-            />
+            <div className="grid gap-5 sm:grid-cols-2">
+              <Toggle
+                name="livePingEveryone"
+                label="Ping @everyone"
+                description="Notify everyone in the server when a stream is detected."
+                defaultChecked={settings.livePingEveryone}
+              />
+              <Toggle
+                name="livePingHere"
+                label="Ping @here"
+                description="Notify members who are currently online."
+                defaultChecked={settings.livePingHere}
+              />
+            </div>
+            <p className="text-xs leading-relaxed text-slate-500">
+              The bot needs the Mention @everyone, @here, and All Roles permission in the announcement channel for these pings.
+            </p>
 
-            <Field
-              label="What should trigger an announcement?"
-              htmlFor="liveMode"
-              description="“Going live” only reacts to the built-in Going Live activity."
-            >
-              <Select name="liveMode" options={MODE_OPTIONS} defaultValue={settings.liveMode} />
-            </Field>
+            <p className="text-xs leading-relaxed text-slate-400">
+              No TikTok or Kick API is used. Detection works only when Discord shares the member&apos;s streaming
+              activity with a Kick or TikTok URL. Enable Server Presence and Server Members intents for the bot.
+            </p>
 
             <div className="grid gap-5 sm:grid-cols-2">
               <Toggle
@@ -130,7 +185,7 @@ export default async function NotificationsPage({
 
         <Card
           title="New post notifications"
-          description="Reposts new forum posts and channel announcements."
+          description="Reposts new Discord forum/channel posts. External platform videos are not monitored."
         >
           <div className="space-y-5">
             <Toggle
@@ -166,12 +221,24 @@ export default async function NotificationsPage({
             <RoleSelect
               name="postRoleId"
               label="Ping role"
-              description="Optional. This role is pinged with every announcement."
+              description="Optional. The role can be pinged alongside @everyone and @here."
               options={roleSelect}
               defaultValue={settings.postRoleId}
             />
 
             <div className="grid gap-5 sm:grid-cols-2">
+              <Toggle
+                name="postPingEveryone"
+                label="Ping @everyone"
+                description="Notify everyone when a new post is announced."
+                defaultChecked={settings.postPingEveryone}
+              />
+              <Toggle
+                name="postPingHere"
+                label="Ping @here"
+                description="Notify members who are currently online."
+                defaultChecked={settings.postPingHere}
+              />
               <Toggle
                 name="postPingAuthor"
                 label="Ping the author"
@@ -184,6 +251,9 @@ export default async function NotificationsPage({
                 defaultChecked={settings.postIncludeContent}
               />
             </div>
+            <p className="text-xs leading-relaxed text-slate-500">
+              The bot needs the Mention @everyone, @here, and All Roles permission in the announcement channel for these pings.
+            </p>
           </div>
         </Card>
 
@@ -195,33 +265,14 @@ export default async function NotificationsPage({
         </div>
       </form>
 
-      <div className="grid gap-6 md:grid-cols-2">
-        <Card
-          title="Test live ping"
-          description="Send a sample live announcement to the configured channel and ping role."
-        >
-          <form action={testLivePing.bind(null, guildId)}>
-            <SubmitButton disabled={!context.canManage}>Send live test</SubmitButton>
-          </form>
-        </Card>
-
-        <Card
-          title="Test post ping"
-          description="Send a sample post announcement to the configured channel and ping role."
-        >
-          <form action={testPostPing.bind(null, guildId)}>
-            <SubmitButton disabled={!context.canManage}>Send post test</SubmitButton>
-          </form>
-        </Card>
-      </div>
-
       <Card
         title="Streaming accounts"
-        description="Keep links to your community’s Kick, TikTok, and Facebook Gaming channels here."
+        description="Save usernames to match against Discord's reported Kick or TikTok live activity."
       >
         <p className="mb-5 text-sm text-slate-400">
-          These profiles are saved for easy access. Automatic live announcements still respond to members’ Discord
-          streaming activities; external account live status is not checked.
+          Add the exact Kick or TikTok username. Alerts are sent only when a server member&apos;s Discord Streaming
+          activity URL matches one of these accounts. No platform API is used; Discord may not expose every stream URL.
+          Latest posts are not monitored without platform data access.
         </p>
 
         {liveStreamAccounts.length === 0 ? (
@@ -246,14 +297,13 @@ export default async function NotificationsPage({
                     Open profile
                   </a>
                 </div>
-                <form action={removeLiveStreamAccount.bind(null, guildId, account.id)}>
-                  <SubmitButton
-                    disabled={!context.canManage}
-                    className="bg-rose-700 shadow-none hover:bg-rose-600"
-                  >
-                    Remove
-                  </SubmitButton>
-                </form>
+                <div className="flex items-center gap-2">
+                  <form action={removeLiveStreamAccount.bind(null, guildId, account.id)}>
+                    <SubmitButton disabled={!context.canManage} tone="danger">
+                      Remove
+                    </SubmitButton>
+                  </form>
+                </div>
               </li>
             ))}
           </ul>
@@ -263,7 +313,7 @@ export default async function NotificationsPage({
           action={addLiveStreamAccount.bind(null, guildId)}
           className="grid gap-4 border-t border-white/5 pt-5 sm:grid-cols-[1fr_1fr_auto] sm:items-end"
         >
-          <Field label="Streaming platform" htmlFor="streamAccountPlatform">
+          <Field label="Streaming platform" htmlFor="streamAccountPlatform" description="Only Kick and TikTok live activity are monitored.">
             <Select
               name="platform"
               id="streamAccountPlatform"

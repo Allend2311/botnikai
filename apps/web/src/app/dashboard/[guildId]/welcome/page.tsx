@@ -16,6 +16,7 @@ import { Badge, Card, EmptyState, Field, Input, Textarea, Toggle } from "@/compo
 import { ChannelSelect, CheckboxGrid, RoleSelect } from "@/components/selects";
 import { SubmitButton } from "@/components/submit-button";
 import { ImageUploadField } from "@/components/image-upload-field";
+import { PageHeader } from "@/components/page-header";
 
 export const dynamic = "force-dynamic";
 
@@ -40,12 +41,11 @@ export default async function WelcomePage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-white">Welcome & roles</h1>
-        <p className="mt-1.5 text-sm text-slate-400">
-          Greet new members, say goodbye and let people claim roles with emoji reactions.
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="Onboarding"
+        title="Welcome & roles"
+        description="Greet new members, say goodbye and let people claim roles with emoji reactions."
+      />
 
       <form action={saveWelcome.bind(null, guildId)} className="space-y-6">
         <Card title="Welcome message" description="Posted when a member joins the server.">

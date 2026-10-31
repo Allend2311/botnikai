@@ -68,6 +68,8 @@ export async function onThreadCreate(thread: AnyThreadChannel): Promise<void> {
       avatarUrl,
       roleId: settings.postRoleId,
       pingAuthor: settings.postPingAuthor,
+      pingEveryone: settings.postPingEveryone,
+      pingHere: settings.postPingHere,
     });
   } catch (error) {
     logger.warn("posts", `Could not announce the forum post: ${(error as Error).message}`);
@@ -94,5 +96,7 @@ export async function announceChannelPost(message: Message): Promise<void> {
     avatarUrl: message.author.displayAvatarURL({ size: 256 }),
     roleId: settings.postRoleId,
     pingAuthor: settings.postPingAuthor,
+    pingEveryone: settings.postPingEveryone,
+    pingHere: settings.postPingHere,
   });
 }

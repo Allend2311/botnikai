@@ -1,4 +1,4 @@
-import { ChannelType, PermissionFlagsBits, SlashCommandBuilder, type TextChannel } from "discord.js";
+import { ChannelType, PermissionFlagsBits, SlashCommandBuilder, type GuildMember, type TextChannel } from "discord.js";
 import { prisma } from "../lib/db";
 import { errorEmbed, successEmbed } from "../lib/embeds";
 import { closeTicket, createTicketButton } from "../services/tickets";
@@ -164,14 +164,70 @@ export const ticketCommand: Command = {
         .setDescription("Rename the current ticket channel")
         .addStringOption((option) => option.setName("name").setDescription("The new channel name").setRequired(true)),
     )
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
+    .addSubcommand((sub) => sub.setName("info").setDescription("Show the details of the current ticket"))
+    .addSubcommand((sub) => sub.setName("list").setDescription("List the open tickets"))
     .setDMPermission(false),
-  userPermissions: [PermissionFlagsBits.ManageChannels],
+  adminOnly: false,
   botPermissions: [PermissionFlagsBits.ManageChannels, PermissionFlagsBits.ManageRoles],
   guildOnly: true,
   async execute({ interaction, guild }) {
     if (!guild) return;
     const sub = interaction.options.getSubcommand();
+    const member = interaction.member as GuildMember | null;
+    if (!member) return;
+
+    const isManager =
+      member.permissions.has(PermissionFlagsBits.ManageChannels) ||
+      member.permissions.has(PermissionFlagsBits.Administrator);
+
+    if (sub === "list") {
+      let canList = isManager;
+      if (!canList) {
+        const panels = await prisma.ticketPanel.findMany({
+          where: { guildId: guild.id },
+          select: { supportRoleId: true },
+        });
+        canList = panels.some((panel) => panel.supportRoleId && member.roles.cache.has(panel.supportRoleId));
+      }
+
+      if (!canList) {
+        await interaction.reply({
+          embeds: [errorEmbed("Only the support team can list tickets.")],
+          ephemeral: true,
+        });
+        return;
+      }
+
+      const tickets = await prisma.ticket.findMany({
+        where: { guildId: guild.id, status: "OPEN" },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+      });
+
+      if (tickets.length === 0) {
+        await interaction.reply({ embeds: [successEmbed("No open tickets", "Every ticket in this server is closed.")], ephemeral: true });
+        return;
+      }
+
+      const lines = tickets.map(
+        (entry) =>
+          `<#${entry.channelId}> — opened by <@${entry.userId}> <t:${Math.floor(entry.createdAt.getTime() / 1000)}:R>`,
+      );
+
+      await interaction.reply({
+        embeds: [
+          {
+            title: `Open tickets (${tickets.length})`,
+            color: 0x6366f1,
+            description: lines.join("\n"),
+            footer: { text: "GuardBot" },
+          },
+        ],
+        ephemeral: true,
+      });
+      return;
+    }
+
     const channel = interaction.channel;
 
     if (!channel || channel.isThread()) {
@@ -185,7 +241,51 @@ export const ticketCommand: Command = {
       return;
     }
 
+    const panel = ticket.panelId
+      ? await prisma.ticketPanel.findUnique({ where: { id: ticket.panelId } })
+      : null;
+    const isSupport =
+      isManager ||
+      Boolean(panel?.supportRoleId && member.roles.cache.has(panel.supportRoleId));
+    const isOwner = ticket.userId === interaction.user.id;
+
+    if (sub === "info") {
+      const transcripts = await prisma.ticketTranscript.count({ where: { ticketId: ticket.id } });
+      await interaction.reply({
+        embeds: [
+          {
+            title: `Ticket ${ticket.id.slice(0, 8)}`,
+            color: ticket.status === "OPEN" ? 0x22c55e : 0x64748b,
+            fields: [
+              { name: "Subject", value: ticket.subject, inline: false },
+              { name: "Status", value: ticket.status === "OPEN" ? "Open" : "Closed", inline: true },
+              { name: "Opened by", value: `<@${ticket.userId}>`, inline: true },
+              { name: "Opened", value: `<t:${Math.floor(ticket.createdAt.getTime() / 1000)}:R>`, inline: true },
+              { name: "Transcript entries", value: String(transcripts), inline: true },
+              ...(ticket.closedAt
+                ? [{ name: "Closed", value: `<t:${Math.floor(ticket.closedAt.getTime() / 1000)}:R>`, inline: true }]
+                : []),
+              ...(ticket.closedBy
+                ? [{ name: "Closed by", value: `<@${ticket.closedBy}>`, inline: true }]
+                : []),
+            ],
+            footer: { text: "GuardBot" },
+          },
+        ],
+        ephemeral: true,
+      });
+      return;
+    }
+
     if (sub === "close") {
+      if (!isOwner && !isSupport) {
+        await interaction.reply({
+          embeds: [errorEmbed("Only the ticket owner or the support team can close this ticket.")],
+          ephemeral: true,
+        });
+        return;
+      }
+
       try {
         await closeTicket(guild, ticket.id, interaction.user.id);
         await interaction.reply({ embeds: [successEmbed("Ticket closed", "The transcript has been saved.")], ephemeral: true });
@@ -195,17 +295,25 @@ export const ticketCommand: Command = {
       return;
     }
 
+    if (!isSupport) {
+      await interaction.reply({
+        embeds: [errorEmbed("Only the support team can manage this ticket.")],
+        ephemeral: true,
+      });
+      return;
+    }
+
     if (sub === "add" || sub === "remove") {
       const user = interaction.options.getUser("user", true);
-      const member = await guild.members.fetch(user.id).catch(() => null);
-      if (!member) {
+      const target = await guild.members.fetch(user.id).catch(() => null);
+      if (!target) {
         await interaction.reply({ embeds: [errorEmbed("That member is not in this server.")], ephemeral: true });
         return;
       }
 
       const textChannel = channel as TextChannel;
       const permission = sub === "add" ? { ViewChannel: true, SendMessages: true } : { ViewChannel: false };
-      await textChannel.permissionOverwrites.edit(member.id, permission, {
+      await textChannel.permissionOverwrites.edit(target.id, permission, {
         reason: `${sub === "add" ? "Added" : "Removed"} by ${interaction.user.tag}`,
       });
 

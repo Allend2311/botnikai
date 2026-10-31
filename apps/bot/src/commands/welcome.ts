@@ -357,6 +357,14 @@ export const reactionRoleCommand: Command = {
         },
       });
 
+      if (messageId) {
+        const resolved = await guild.channels.fetch(channel.id).catch(() => null);
+        if (resolved?.isTextBased() && "messages" in resolved) {
+          const message = await resolved.messages.fetch(messageId).catch(() => null);
+          if (message) await message.react(emoji).catch(() => undefined);
+        }
+      }
+
       await interaction.reply({
         embeds: [
           successEmbed(

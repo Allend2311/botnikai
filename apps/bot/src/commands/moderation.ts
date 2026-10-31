@@ -1,8 +1,8 @@
-import { PermissionFlagsBits, SlashCommandBuilder, type TextChannel } from "discord.js";
-import { CASE_LABELS } from "@guardbot/shared";
+import { PermissionFlagsBits, SlashCommandBuilder, type Role, type TextChannel } from "discord.js";
+import { CASE_COLORS, CASE_LABELS } from "@guardbot/shared";
 import { prisma } from "../lib/db";
 import { errorEmbed, successEmbed, warnEmbed } from "../lib/embeds";
-import { addWarning, recordCase, tryDirectMessage } from "../services/moderation";
+import { addWarning, formatMs, recordCase, tryDirectMessage } from "../services/moderation";
 import type { Command } from "../types";
 
 function durationOptions(maxMinutes = 60 * 24 * 28) {
@@ -611,6 +611,323 @@ export const modlogsCommand: Command = {
   },
 };
 
+export const caseCommand: Command = {
+  data: new SlashCommandBuilder()
+    .setName("case")
+    .setDescription("Show a moderation case")
+    .addIntegerOption((option) =>
+      option.setName("number").setDescription("The case number").setMinValue(1).setRequired(true),
+    )
+    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
+    .setDMPermission(false),
+  userPermissions: [PermissionFlagsBits.ModerateMembers],
+  guildOnly: true,
+  async execute({ interaction, guild }) {
+    if (!guild) return;
+    const caseNumber = interaction.options.getInteger("number", true);
+
+    const entry = await prisma.case.findUnique({
+      where: { guildId_caseNumber: { guildId: guild.id, caseNumber } },
+    });
+    if (!entry) {
+      await interaction.reply({ embeds: [errorEmbed("Case not found", `No case #${caseNumber} exists in this server.`)], ephemeral: true });
+      return;
+    }
+
+    const type = entry.type as keyof typeof CASE_LABELS;
+    const embed = {
+      title: `Case #${entry.caseNumber} • ${CASE_LABELS[type] ?? entry.type}`,
+      color: CASE_COLORS[type] ?? 0x6366f1,
+      fields: [
+        { name: "Target", value: entry.targetTag ? `${entry.targetTag} (\`${entry.targetId}\`)` : `<@${entry.targetId}>`, inline: false },
+        { name: "Moderator", value: `<@${entry.moderatorId}>`, inline: true },
+        { name: "Created", value: `<t:${Math.floor(entry.createdAt.getTime() / 1000)}:F>`, inline: true },
+        { name: "Reason", value: entry.reason, inline: false },
+        ...(entry.durationMs ? [{ name: "Duration", value: formatMs(entry.durationMs), inline: true }] : []),
+        ...(entry.meta ? [{ name: "Details", value: `\`\`\`json\n${entry.meta.slice(0, 900)}\n\`\`\``, inline: false }] : []),
+      ],
+      footer: { text: "GuardBot" },
+      timestamp: new Date().toISOString(),
+    };
+
+    await interaction.reply({ embeds: [embed], ephemeral: true });
+  },
+};
+
+export const deleteCaseCommand: Command = {
+  data: new SlashCommandBuilder()
+    .setName("delcase")
+    .setDescription("Delete a moderation case from the history")
+    .addIntegerOption((option) =>
+      option.setName("number").setDescription("The case number").setMinValue(1).setRequired(true),
+    )
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setDMPermission(false),
+  guildOnly: true,
+  async execute({ interaction, guild }) {
+    if (!guild) return;
+    const caseNumber = interaction.options.getInteger("number", true);
+    const { count } = await prisma.case.deleteMany({ where: { guildId: guild.id, caseNumber } });
+
+    if (count === 0) {
+      await interaction.reply({ embeds: [errorEmbed("Case not found", `No case #${caseNumber} exists in this server.`)], ephemeral: true });
+      return;
+    }
+
+    await interaction.reply({ embeds: [successEmbed("Case deleted", `Case #${caseNumber} was removed from the history.`)], ephemeral: true });
+  },
+};
+
+export const softbanCommand: Command = {
+  data: new SlashCommandBuilder()
+    .setName("softban")
+    .setDescription("Ban and immediately unban a member to delete their messages")
+    .addUserOption((option) => option.setName("user").setDescription("The member to softban").setRequired(true))
+    .addStringOption((option) => option.setName("reason").setDescription("Why are you softbanning them?"))
+    .addIntegerOption((option) =>
+      option.setName("days").setDescription("How many days of messages to delete (0-7)").setMinValue(0).setMaxValue(7),
+    )
+    .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers)
+    .setDMPermission(false),
+  userPermissions: [PermissionFlagsBits.BanMembers],
+  botPermissions: [PermissionFlagsBits.BanMembers],
+  guildOnly: true,
+  async execute({ interaction, guild, client }) {
+    if (!guild) return;
+    const user = interaction.options.getUser("user", true);
+    const reason = interaction.options.getString("reason") ?? "No reason provided";
+    const days = interaction.options.getInteger("days") ?? 1;
+
+    if (user.id === interaction.user.id) {
+      await interaction.reply({ embeds: [errorEmbed("You cannot softban yourself.")], ephemeral: true });
+      return;
+    }
+
+    const member = await guild.members.fetch(user.id).catch(() => null);
+    if (member?.permissions.has(PermissionFlagsBits.Administrator)) {
+      await interaction.reply({
+        embeds: [errorEmbed("That member has the Administrator permission and cannot be softbanned.")],
+        ephemeral: true,
+      });
+      return;
+    }
+
+    try {
+      await guild.bans.create(user.id, { reason: `Softban: ${reason}`, deleteMessageSeconds: days * 86400 });
+      await guild.bans.remove(user.id, `Softban: ${reason}`);
+    } catch (error) {
+      await interaction.reply({
+        embeds: [errorEmbed("Could not softban that member.", (error as Error).message)],
+        ephemeral: true,
+      });
+      return;
+    }
+
+    await tryDirectMessage(
+      client,
+      user.id,
+      warnEmbed(`You have been softbanned from ${guild.name}`, `Reason: ${reason}\nYou may rejoin with a new invite.`),
+    );
+
+    const caseNumber = await recordCase({
+      guild,
+      type: "BAN",
+      targetId: user.id,
+      targetTag: user.tag,
+      moderatorId: interaction.user.id,
+      reason,
+      meta: { softban: true, deletedDays: days },
+    });
+
+    await interaction.reply({
+      embeds: [
+        successEmbed(
+          "Member softbanned",
+          `<@${user.id}> was removed and their recent messages were deleted. Case #${caseNumber}.`,
+        ),
+      ],
+      ephemeral: true,
+    });
+  },
+};
+
+export const roleCommand: Command = {
+  data: new SlashCommandBuilder()
+    .setName("role")
+    .setDescription("Add or remove a role from a member")
+    .addSubcommand((sub) =>
+      sub
+        .setName("add")
+        .setDescription("Give a role to a member")
+        .addUserOption((option) => option.setName("user").setDescription("The member").setRequired(true))
+        .addRoleOption((option) => option.setName("role").setDescription("The role to give").setRequired(true)),
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName("remove")
+        .setDescription("Remove a role from a member")
+        .addUserOption((option) => option.setName("user").setDescription("The member").setRequired(true))
+        .addRoleOption((option) => option.setName("role").setDescription("The role to remove").setRequired(true)),
+    )
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles)
+    .setDMPermission(false),
+  userPermissions: [PermissionFlagsBits.ManageRoles],
+  botPermissions: [PermissionFlagsBits.ManageRoles],
+  guildOnly: true,
+  async execute({ interaction, guild }) {
+    if (!guild) return;
+    const sub = interaction.options.getSubcommand();
+    const user = interaction.options.getUser("user", true);
+    const role = interaction.options.getRole("role", true) as Role;
+
+    if (role.id === guild.id) {
+      await interaction.reply({ embeds: [errorEmbed("The @everyone role cannot be assigned.")], ephemeral: true });
+      return;
+    }
+    if (role.managed) {
+      await interaction.reply({ embeds: [errorEmbed("That role is managed by an integration and cannot be assigned.")], ephemeral: true });
+      return;
+    }
+
+    const member = await guild.members.fetch(user.id).catch(() => null);
+    if (!member) {
+      await interaction.reply({ embeds: [errorEmbed("That member is not in this server.")], ephemeral: true });
+      return;
+    }
+
+    const me = guild.members.me;
+    if (!me || role.position >= me.roles.highest.position) {
+      await interaction.reply({
+        embeds: [errorEmbed("I cannot manage that role.", "Move my role above it in the server settings.")],
+        ephemeral: true,
+      });
+      return;
+    }
+
+    try {
+      if (sub === "add") {
+        await member.roles.add(role, `Added by ${interaction.user.tag}`);
+      } else {
+        await member.roles.remove(role, `Removed by ${interaction.user.tag}`);
+      }
+    } catch (error) {
+      await interaction.reply({ embeds: [errorEmbed("Could not update the roles.", (error as Error).message)], ephemeral: true });
+      return;
+    }
+
+    await interaction.reply({
+      embeds: [
+        successEmbed(
+          sub === "add" ? "Role added" : "Role removed",
+          `${role} was ${sub === "add" ? "given to" : "removed from"} ${member}.`,
+        ),
+      ],
+      ephemeral: true,
+    });
+  },
+};
+
+export const nicknameCommand: Command = {
+  data: new SlashCommandBuilder()
+    .setName("nickname")
+    .setDescription("Change or reset the nickname of a member")
+    .addUserOption((option) => option.setName("user").setDescription("The member").setRequired(true))
+    .addStringOption((option) =>
+      option.setName("name").setDescription("The new nickname (leave empty to reset)").setMaxLength(32),
+    )
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageNicknames)
+    .setDMPermission(false),
+  userPermissions: [PermissionFlagsBits.ManageNicknames],
+  botPermissions: [PermissionFlagsBits.ManageNicknames],
+  guildOnly: true,
+  async execute({ interaction, guild }) {
+    if (!guild) return;
+    const user = interaction.options.getUser("user", true);
+    const name = interaction.options.getString("name")?.trim() || null;
+
+    const member = await guild.members.fetch(user.id).catch(() => null);
+    if (!member) {
+      await interaction.reply({ embeds: [errorEmbed("That member is not in this server.")], ephemeral: true });
+      return;
+    }
+
+    if (member.id === guild.ownerId) {
+      await interaction.reply({ embeds: [errorEmbed("The server owner's nickname cannot be changed.")], ephemeral: true });
+      return;
+    }
+
+    try {
+      await member.setNickname(name, `Changed by ${interaction.user.tag}`);
+    } catch (error) {
+      await interaction.reply({ embeds: [errorEmbed("Could not change the nickname.", (error as Error).message)], ephemeral: true });
+      return;
+    }
+
+    await interaction.reply({
+      embeds: [
+        successEmbed(
+          name ? "Nickname updated" : "Nickname reset",
+          name ? `${member} is now called **${name}**.` : `${member} uses their original username again.`,
+        ),
+      ],
+      ephemeral: true,
+    });
+  },
+};
+
+export const nukeCommand: Command = {
+  data: new SlashCommandBuilder()
+    .setName("nuke")
+    .setDescription("Recreate this channel and delete every message in it")
+    .addStringOption((option) =>
+      option.setName("confirm").setDescription('Type "confirm" to permanently delete the channel history').setRequired(true),
+    )
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setDMPermission(false),
+  botPermissions: [PermissionFlagsBits.ManageChannels],
+  guildOnly: true,
+  async execute({ interaction, guild }) {
+    if (!guild) return;
+    const confirmation = interaction.options.getString("confirm", true).trim().toLowerCase();
+    if (confirmation !== "confirm") {
+      await interaction.reply({
+        embeds: [errorEmbed("Nuke cancelled.", 'You must type `confirm` in the confirm option.')],
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const channel = interaction.channel;
+    if (!channel || !channel.isTextBased() || channel.isDMBased() || !("clone" in channel)) {
+      await interaction.reply({ embeds: [errorEmbed("This channel cannot be recreated.")], ephemeral: true });
+      return;
+    }
+
+    const textChannel = channel as TextChannel;
+    const position = textChannel.position;
+    const parentId = textChannel.parentId;
+
+    await interaction.deferReply({ ephemeral: true });
+
+    const cloned = await textChannel.clone({ reason: `Channel nuked by ${interaction.user.tag}` });
+    await cloned.setPosition(position).catch(() => undefined);
+    await textChannel.delete(`Channel nuked by ${interaction.user.tag}`);
+
+    await cloned.send({
+      embeds: [
+        successEmbed(
+          "Channel cleared",
+          `This channel was recreated by ${interaction.user}. ${parentId ? `Previous category: <#${parentId}>.` : ""}`,
+        ),
+      ],
+    });
+
+    await interaction
+      .editReply({ embeds: [successEmbed("Channel recreated", `Continue the conversation in ${cloned}.`)] })
+      .catch(() => undefined);
+  },
+};
+
 export const moderationCommands: Command[] = [
   banCommand,
   unbanCommand,
@@ -625,4 +942,10 @@ export const moderationCommands: Command[] = [
   lockCommand,
   unlockCommand,
   modlogsCommand,
+  caseCommand,
+  deleteCaseCommand,
+  softbanCommand,
+  roleCommand,
+  nicknameCommand,
+  nukeCommand,
 ];

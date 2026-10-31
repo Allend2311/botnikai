@@ -6,6 +6,7 @@ import {
   type MessageActionRowComponentData,
   SlashCommandBuilder,
 } from "discord.js";
+import { logger } from "../lib/logger";
 import type { Command } from "../types";
 
 export const roleRequestCommand: Command = {
@@ -17,7 +18,7 @@ export const roleRequestCommand: Command = {
         .setName("submit")
         .setDescription("Submit a role request application")
         .addStringOption((option) =>
-          option.setName("in-game-name").setDescription("Your in-game name").setRequired(true).setMaxLength(80),
+          option.setName("in-game-name").setDescription("Your in-game name (used as your server nickname if approved)").setRequired(true).setMaxLength(32),
         )
         .addUserOption((option) =>
           option
@@ -30,6 +31,7 @@ export const roleRequestCommand: Command = {
         ),
     )
     .setDMPermission(false),
+  adminOnly: false,
   guildOnly: true,
   defer: true,
   async execute({ interaction, guild, prisma }) {
@@ -78,6 +80,7 @@ export const roleRequestCommand: Command = {
         voucherId: voucher.id,
         voucherName: voucher.globalName ?? voucher.username,
         evidenceUrl: evidence?.url ?? null,
+        reviewChannelId: interaction.channelId,
       },
     });
 
@@ -137,15 +140,37 @@ export const roleRequestCommand: Command = {
       ],
     };
 
-    try {
-      await voucher.send({ embeds: [embed], components: [row] });
-    } catch {
+    const channel = interaction.channel;
+    if (!channel?.isTextBased() || !("send" in channel)) {
       await prisma.roleRequest.delete({ where: { id: request.id } });
-      await interaction.editReply("I couldn't DM the person you selected. Ask them to enable DMs from server members, then submit again.");
+      await interaction.editReply("Role requests must be submitted in a text channel where the bot can post.");
       return;
     }
 
-    await interaction.editReply(`Your request was sent to ${voucher}. An Administrator can review it after they confirm your vouch.`);
+    let requestMessage;
+    try {
+      requestMessage = await channel.send({ embeds: [embed], components: [row] });
+    } catch (error) {
+      await prisma.roleRequest.delete({ where: { id: request.id } });
+      logger.error("role-requests", `Could not post request ${request.id} in channel ${interaction.channelId}: ${(error as Error).message}`, error);
+      await interaction.editReply("I couldn't post the role request in this channel. Check that I have permission to send messages and embeds.");
+      return;
+    }
+
+    try {
+      await prisma.roleRequest.update({
+        where: { id: request.id },
+        data: { reviewMessageId: requestMessage.id },
+      });
+    } catch (error) {
+      await requestMessage.delete().catch((deleteError) =>
+        logger.warn("role-requests", `Could not remove an untracked request message ${requestMessage.id}: ${(deleteError as Error).message}`),
+      );
+      await prisma.roleRequest.delete({ where: { id: request.id } });
+      throw error;
+    }
+
+    await interaction.editReply(`Your role request is posted in <#${interaction.channelId}>. ${voucher} can confirm it there.`);
   },
 };
 

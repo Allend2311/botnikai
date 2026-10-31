@@ -4,6 +4,7 @@ import { CASE_LABELS, isCaseType, relativeTime } from "@guardbot/shared";
 import { getGuildContext } from "@/lib/guild";
 import { prisma } from "@/lib/prisma";
 import { Badge, Card, EmptyState, Stat } from "@/components/ui";
+import { PageHeader, StatusPill } from "@/components/page-header";
 import { WEBSITE_NAME } from "@/lib/brand";
 
 export const dynamic = "force-dynamic";
@@ -13,18 +14,24 @@ const MODULES = [
     key: "welcome",
     title: "Welcome messages",
     description: "Greet new members and hand out auto roles.",
+    icon: <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm7 8a7 7 0 0 0-14 0" />,
+    tone: "text-brand-300",
     enabled: (settings: { welcomeEnabled: boolean }) => settings.welcomeEnabled,
   },
   {
     key: "tickets",
     title: "Ticket system",
     description: "Support panels and private ticket channels.",
+    icon: <path d="M4 6h16v12H4zM4 8l8 5 8-5" />,
+    tone: "text-sky-300",
     enabled: () => true,
   },
   {
     key: "notifications",
     title: "Live & post pings",
     description: "Announce streams and new posts.",
+    icon: <path d="M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16Zm0 4v4l3 2" />,
+    tone: "text-emerald-300",
     enabled: (settings: { liveEnabled: boolean; postEnabled: boolean }) =>
       settings.liveEnabled || settings.postEnabled,
   },
@@ -32,6 +39,8 @@ const MODULES = [
     key: "moderation",
     title: "Auto-moderation",
     description: "Filter links, spam, caps and banned words.",
+    icon: <path d="M12 2.5 4.5 5.6v5.7c0 4.6 3.1 8.9 7.5 10.2 4.4-1.3 7.5-5.6 7.5-10.2V5.6L12 2.5Z" />,
+    tone: "text-rose-300",
     enabled: (automod: { enabled: boolean }) => automod.enabled,
   },
 ];
@@ -69,18 +78,22 @@ export default async function GuildOverviewPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-white">Overview</h1>
-        <p className="mt-1.5 text-sm text-slate-400">
-          Everything {WEBSITE_NAME} is doing in {context.guild.name}.
-          </p>
-      </div>
+      <PageHeader
+        eyebrow="Server overview"
+        title="Overview"
+        description={`Everything ${WEBSITE_NAME} is doing in ${context.guild.name}.`}
+        action={<StatusPill label="Systems online" />}
+      />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat label="Moderation cases" value={caseCount} />
-        <Stat label="Open tickets" value={openTickets} />
-        <Stat label="Active warnings" value={warningCount} />
-        <Stat label="Members" value={context.guild.approximate_member_count ?? 0} />
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+        <Stat label="Moderation cases" value={caseCount} hint="Actions logged" />
+        <Stat label="Open tickets" value={openTickets} hint="Awaiting reply" />
+        <Stat label="Active warnings" value={warningCount} hint="Currently active" />
+        <Stat
+          label="Members"
+          value={(context.guild.approximate_member_count ?? 0).toLocaleString()}
+          hint="Discord count"
+        />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -106,11 +119,29 @@ export default async function GuildOverviewPage({
               return (
                 <li
                   key={module.key}
-                  className="flex items-center justify-between gap-4 rounded-xl border border-white/5 bg-ink-950/40 px-4 py-3"
+                  className="flex items-center gap-3 rounded-xl border border-white/[0.06] bg-white/[0.018] px-3 py-3 transition hover:border-white/10 hover:bg-white/[0.03] sm:px-4"
                 >
-                  <span>
-                    <span className="block text-sm font-medium text-slate-200">{module.title}</span>
-                    <span className="mt-0.5 block text-xs text-slate-500">{module.description}</span>
+                  <span className={`icon-tile h-9 w-9 shrink-0 rounded-lg ${module.tone}`}>
+                    <svg
+                      viewBox="0 0 24 24"
+                      className="h-4 w-4"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      {module.icon}
+                    </svg>
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-xs font-medium text-slate-200 sm:text-sm">
+                      {module.title}
+                    </span>
+                    <span className="mt-0.5 block truncate text-[10px] text-slate-500 sm:text-xs">
+                      {module.description}
+                    </span>
                   </span>
                   <Badge tone={enabled ? "green" : "neutral"}>
                     {enabled ? "Active" : "Off"}

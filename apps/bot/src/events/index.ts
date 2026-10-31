@@ -6,6 +6,7 @@ import {
   type Message,
 } from "discord.js";
 import { logger } from "../lib/logger";
+import { registerGuildCommands } from "../lib/registerCommands";
 import { ensureGuild } from "../lib/settings";
 import { handleInteraction } from "./interactionCreate";
 import { onGuildMemberAdd, onGuildMemberRemove } from "./members";
@@ -61,6 +62,9 @@ export function registerEvents(client: Client): void {
   });
 
   client.on(Events.GuildCreate, (guild) => {
+    void registerGuildCommands(guild.id).catch((error) =>
+      logger.error("deploy", `Could not register commands in new guild ${guild.id}: ${(error as Error).message}`, error),
+    );
     void ensureGuild(guild.id, guild.name, guild.ownerId, guild.iconURL(), guild.memberCount).catch((error) =>
       logger.warn("bot", `Could not sync the new guild: ${(error as Error).message}`),
     );

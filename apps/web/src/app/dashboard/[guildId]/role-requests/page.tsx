@@ -1,10 +1,10 @@
 import { notFound } from "next/navigation";
-import { approveRoleRequest, denyRoleRequest } from "@/app/actions";
-import { SubmitButton } from "@/components/submit-button";
 import { Badge, Card, EmptyState } from "@/components/ui";
-import { RoleSelect } from "@/components/selects";
 import { getGuildContext, roleOptions } from "@/lib/guild";
+import { getRoleAssignmentCapabilities, roleAssignmentBlocker } from "@/lib/discord";
 import { prisma } from "@/lib/prisma";
+import { PageHeader } from "@/components/page-header";
+import { RoleRequestActions } from "./role-request-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -42,16 +42,42 @@ export default async function RoleRequestsPage({
     take: 100,
   });
 
-  const roleSelect = roleOptions(context.roles.filter((role) => !role.managed), false);
+  /**
+   * Discord only lets the bot grant roles that sit below its own highest role.
+   * Loading that information lets the page hide impossible choices instead of
+   * letting Discord reject the request later.
+   */
+  const capabilities = await getRoleAssignmentCapabilities(guildId, context.roles).catch(
+    (error) => {
+      console.error(
+        `[role-requests] Could not check the bot's role permissions in ${guildId}:`,
+        error,
+      );
+      return null;
+    },
+  );
+
+  const assignableRoles = context.roles.filter(
+    (role) =>
+      !role.managed &&
+      (!capabilities || roleAssignmentBlocker(role, capabilities, guildId) === null),
+  );
+  const roleSelect = roleOptions(assignableRoles, false);
+  const assignableRoleIds = new Set(assignableRoles.map((role) => role.id));
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-white">Role requests</h1>
-        <p className="mt-1.5 text-sm text-slate-400">
-          Review applications after the nominated person confirms their vouch.
+      <PageHeader
+        eyebrow="Applications"
+        title="Role requests"
+        description="Review applications after the nominated person confirms their vouch."
+      />
+
+      {capabilities?.reason && (
+        <p className="rounded-xl border border-amber-400/20 bg-amber-400/[0.06] px-4 py-3 text-sm leading-relaxed text-amber-200">
+          {capabilities.reason}
         </p>
-      </div>
+      )}
 
       <Card title="Applications" description={`${requests.length} recent request(s)`}>
         {requests.length === 0 ? (
@@ -64,6 +90,13 @@ export default async function RoleRequestsPage({
                 tone: "neutral" as const,
               };
               const canReview = request.status === "PENDING_REVIEW";
+              const requestedRole = request.roleId
+                ? context.roles.find((role) => role.id === request.roleId) ?? null
+                : null;
+              const requestedRoleBlocker =
+                requestedRole && capabilities
+                  ? roleAssignmentBlocker(requestedRole, capabilities, guildId)
+                  : null;
 
               return (
                 <li
@@ -84,8 +117,11 @@ export default async function RoleRequestsPage({
                     <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
                       <div>
                         <dt className="text-xs font-semibold text-slate-500">Applicant</dt>
-                        <dd className="mt-1 text-slate-200">
-                          {request.applicantName} <span className="text-slate-500">({request.applicantId})</span>
+                        <dd className="mt-1 min-w-0 text-slate-200">
+                          <span className="break-words">{request.applicantName}</span>
+                          <span className="mt-0.5 block break-all font-mono text-xs text-slate-500">
+                            {request.applicantId}
+                          </span>
                         </dd>
                       </div>
                       <div>
@@ -94,8 +130,11 @@ export default async function RoleRequestsPage({
                       </div>
                       <div>
                         <dt className="text-xs font-semibold text-slate-500">Vouched by</dt>
-                        <dd className="mt-1 text-slate-200">
-                          {request.voucherName} <span className="text-slate-500">({request.voucherId})</span>
+                        <dd className="mt-1 min-w-0 text-slate-200">
+                          <span className="break-words">{request.voucherName}</span>
+                          <span className="mt-0.5 block break-all font-mono text-xs text-slate-500">
+                            {request.voucherId}
+                          </span>
                         </dd>
                       </div>
                       {request.roleId && (
@@ -128,26 +167,17 @@ export default async function RoleRequestsPage({
                   </div>
 
                   {canReview && (
-                    <div className="flex flex-wrap items-end gap-3 border-t border-white/5 bg-white/[0.02] px-5 py-3">
-                      <form
-                        action={approveRoleRequest.bind(null, guildId, request.id)}
-                        className="flex flex-wrap items-end gap-3"
-                      >
-                        <RoleSelect
-                          name="roleId"
-                          label="Role to grant"
-                          options={roleSelect}
-                          defaultValue={request.roleId}
-                          required
-                        />
-                        <SubmitButton className="bg-emerald-600 hover:bg-emerald-500">
-                          Approve & assign
-                        </SubmitButton>
-                      </form>
-                      <form action={denyRoleRequest.bind(null, guildId, request.id)}>
-                        <SubmitButton className="bg-rose-700 hover:bg-rose-600">Deny</SubmitButton>
-                      </form>
-                    </div>
+                    <RoleRequestActions
+                      guildId={guildId}
+                      requestId={request.id}
+                      options={roleSelect}
+                      defaultRoleId={
+                        requestedRole && assignableRoleIds.has(requestedRole.id)
+                          ? requestedRole.id
+                          : null
+                      }
+                      blockedReason={requestedRoleBlocker}
+                    />
                   )}
                 </li>
               );

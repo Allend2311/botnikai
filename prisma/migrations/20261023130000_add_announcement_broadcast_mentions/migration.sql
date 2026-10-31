@@ -1,0 +1,5 @@
+ALTER TABLE "GuildSettings"
+ADD COLUMN "livePingEveryone" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN "livePingHere" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN "postPingEveryone" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN "postPingHere" BOOLEAN NOT NULL DEFAULT false;

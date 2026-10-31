@@ -30,7 +30,6 @@ const envSchema = z.object({
   DISCORD_CLIENT_ID: z.string().min(1, "DISCORD_CLIENT_ID is required"),
   DISCORD_CLIENT_SECRET: z.string().min(1, "DISCORD_CLIENT_SECRET is required"),
   DISCORD_APPLICATION_ID: z.string().min(1, "DISCORD_APPLICATION_ID is required"),
-  DEV_GUILD_ID: z.string().optional(),
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required (Supabase connection string)"),
   DIRECT_URL: z.string().optional(),
   APP_URL: z.string().default("http://localhost:3000"),

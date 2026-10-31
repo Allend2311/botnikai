@@ -27,6 +27,10 @@ export interface CommandContext {
 
 export interface Command {
   data: CommandData;
+  /** Whether only server Administrators may use this command. Defaults to true. */
+  adminOnly?: boolean;
+  /** Whether only the bot owner may use this command. Also allows use in DMs. */
+  ownerOnly?: boolean;
   /** Permissions the *user* needs to run the command. */
   userPermissions?: PermissionResolvable[];
   /** Permissions the *bot* needs in the guild to run the command. */

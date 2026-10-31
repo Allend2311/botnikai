@@ -4,6 +4,7 @@ import { relativeTime } from "@guardbot/shared";
 import { getGuildContext } from "@/lib/guild";
 import { prisma } from "@/lib/prisma";
 import { Badge, Card, EmptyState } from "@/components/ui";
+import { PageHeader } from "@/components/page-header";
 
 export const dynamic = "force-dynamic";
 
@@ -30,39 +31,46 @@ export default async function TicketDetailPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link
-          href={`/dashboard/${guildId}/tickets`}
-          className="text-xs font-medium text-brand-300 hover:text-brand-200"
-        >
-          ← Back to tickets
-        </Link>
-        <div className="mt-2 flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-semibold tracking-tight text-white">{ticket.subject}</h1>
+      <Link
+        href={`/dashboard/${guildId}/tickets`}
+        className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-300 transition hover:text-brand-200"
+      >
+        <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+          <path d="M19 12H5m6 6-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        Back to tickets
+      </Link>
+
+      <PageHeader
+        eyebrow="Ticket detail"
+        title={ticket.subject}
+        description={
+          <>
+            Opened {relativeTime(ticket.createdAt)}
+            {ticket.closedAt ? ` · closed ${relativeTime(ticket.closedAt)}` : ""}
+          </>
+        }
+        action={
           <Badge tone={ticket.status === "OPEN" ? "green" : "neutral"}>
             {ticket.status === "OPEN" ? "Open" : "Closed"}
           </Badge>
-        </div>
-        <p className="mt-1.5 text-sm text-slate-400">
-          Opened {relativeTime(ticket.createdAt)}
-          {ticket.closedAt ? ` · closed ${relativeTime(ticket.closedAt)}` : ""}
-        </p>
-      </div>
+        }
+      />
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Card title="Details">
           <dl className="space-y-3 text-sm">
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
               <dt className="text-slate-500">Opened by</dt>
-              <dd className="font-mono text-xs text-slate-300">{ticket.userId}</dd>
+              <dd className="min-w-0 break-all font-mono text-xs text-slate-300">{ticket.userId}</dd>
             </div>
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
               <dt className="text-slate-500">Channel</dt>
-              <dd className="font-mono text-xs text-slate-300">{ticket.channelId}</dd>
+              <dd className="min-w-0 break-all font-mono text-xs text-slate-300">{ticket.channelId}</dd>
             </div>
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
               <dt className="text-slate-500">Closed by</dt>
-              <dd className="font-mono text-xs text-slate-300">{ticket.closedBy ?? "—"}</dd>
+              <dd className="min-w-0 break-all font-mono text-xs text-slate-300">{ticket.closedBy ?? "—"}</dd>
             </div>
           </dl>
           <a

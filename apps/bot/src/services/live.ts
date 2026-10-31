@@ -4,41 +4,59 @@ import {
   type Guild,
   type GuildMember,
 } from "discord.js";
-import { applyTemplate, type LiveMode } from "@guardbot/shared";
+import { applyTemplate } from "@guardbot/shared";
 import { baseEmbed, errorEmbed } from "../lib/embeds";
 import { logger } from "../lib/logger";
 import { getGuildSettings } from "../lib/settings";
 
-/**
- * Discord represents "Going Live" as a Streaming activity. Some servers use a
- * Custom activity named "Live" instead, so both are supported.
- */
-export function findLiveActivity(activities: readonly Activity[]): Activity | undefined {
-  return (
-    activities.find((activity) => activity.type === ActivityType.Streaming) ??
-    activities.find(
-      (activity) =>
-        activity.type === ActivityType.Custom &&
-        typeof activity.name === "string" &&
-        activity.name.toLowerCase().includes("live"),
-    ) ??
-    activities.find(
-      (activity) =>
-        activity.type === ActivityType.Playing &&
-        typeof activity.name === "string" &&
-        activity.name.toLowerCase() === "live",
-    )
+interface LiveStreamAccountProfile {
+  platform: string;
+  username: string;
+}
+
+function getLiveStreamPlatform(activity: Activity): "Kick" | "TikTok" | null {
+  if (activity.type !== ActivityType.Streaming || !activity.url) return null;
+
+  try {
+    const hostname = new URL(activity.url).hostname.toLowerCase();
+    if (hostname === "kick.com" || hostname.endsWith(".kick.com")) return "Kick";
+    if (hostname === "tiktok.com" || hostname.endsWith(".tiktok.com")) return "TikTok";
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function getLiveStreamUsername(activity: Activity, platform: "Kick" | "TikTok"): string | null {
+  if (!activity.url) return null;
+  try {
+    const pathname = new URL(activity.url).pathname;
+    const match = platform === "TikTok" ? pathname.match(/^\/@([^/]+)/) : pathname.match(/^\/([^/]+)/);
+    return match?.[1]?.replace(/^@/, "").toLowerCase() ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function matchesConfiguredAccount(activity: Activity, accounts: readonly LiveStreamAccountProfile[]): boolean {
+  const platform = getLiveStreamPlatform(activity);
+  if (!platform) return false;
+
+  const username = getLiveStreamUsername(activity, platform);
+  if (!username) return false;
+
+  return accounts.some(
+    (account) =>
+      account.platform === platform &&
+      account.username.replace(/^@+/, "").toLowerCase() === username,
   );
 }
 
-export function isLiveActivity(activity: Activity): boolean {
-  return activity.type === ActivityType.Streaming || /live/i.test(activity.state ?? "");
-}
-
-export function activityMatchesMode(activity: Activity, mode: LiveMode): boolean {
-  if (mode === "both") return true;
-  if (mode === "live") return isLiveActivity(activity) || activity.type === ActivityType.Custom;
-  return activity.type === ActivityType.Streaming;
+export function findLiveActivity(
+  activities: readonly Activity[],
+  accounts: readonly LiveStreamAccountProfile[],
+): Activity | undefined {
+  return activities.find((activity) => matchesConfiguredAccount(activity, accounts));
 }
 
 export function activityUrl(activity: Activity): string | null {
@@ -71,19 +89,22 @@ export async function announceLive(guild: Guild, member: GuildMember, activity: 
   if (activity.state) embed.addFields({ name: "Status", value: String(activity.state), inline: true });
   if (url && settings.liveIncludeUrl) embed.setURL(url);
 
-  const mentions = [
-    settings.liveRoleId ? `<@&${settings.liveRoleId}>` : "",
-    settings.livePingUser ? `<@${member.id}>` : "",
+  const broadcastMentions = [
+    settings.livePingEveryone ? "@everyone" : "",
+    settings.livePingHere ? "@here" : "",
   ].filter(Boolean);
 
   try {
     await channel.send({
-      content: mentions.join(" ") || undefined,
+      content: [
+        settings.liveRoleId ? `<@&${settings.liveRoleId}>` : "",
+        ...broadcastMentions,
+      ].filter(Boolean).join(" ") || undefined,
       embeds: [embed],
       allowedMentions: {
-        parse: [],
+        parse: broadcastMentions.length > 0 ? ["everyone"] : [],
         roles: settings.liveRoleId ? [settings.liveRoleId] : [],
-        users: settings.livePingUser ? [member.id] : [],
+        users: [],
       },
     });
     return true;
@@ -125,6 +146,8 @@ export async function announcePost(guild: Guild, options: {
   avatarUrl?: string;
   roleId?: string | null;
   pingAuthor?: boolean;
+  pingEveryone?: boolean;
+  pingHere?: boolean;
 }): Promise<boolean> {
   const settings = await getGuildSettings(guild.id);
   if (!settings.postEnabled || !settings.postChannelId) return false;
@@ -141,7 +164,15 @@ export async function announcePost(guild: Guild, options: {
   embed.addFields({ name: "Author", value: options.authorTag, inline: true });
   if (options.content) embed.setDescription(options.content);
 
-  const mentions = [options.roleId ? `<@&${options.roleId}>` : "", options.pingAuthor ? `<@${options.authorId}>` : ""]
+  const broadcastMentions = [
+    options.pingEveryone ? "@everyone" : "",
+    options.pingHere ? "@here" : "",
+  ].filter(Boolean);
+  const mentions = [
+    options.roleId ? `<@&${options.roleId}>` : "",
+    ...broadcastMentions,
+    options.pingAuthor ? `<@${options.authorId}>` : "",
+  ]
     .filter(Boolean)
     .join(" ");
 
@@ -150,7 +181,7 @@ export async function announcePost(guild: Guild, options: {
       content: mentions || undefined,
       embeds: [embed],
       allowedMentions: {
-        parse: [],
+        parse: broadcastMentions.length > 0 ? ["everyone"] : [],
         roles: options.roleId ? [options.roleId] : [],
         users: options.pingAuthor ? [options.authorId] : [],
       },

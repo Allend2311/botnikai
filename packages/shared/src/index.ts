@@ -102,26 +102,12 @@ export const TICKET_STATUS_LABELS: Record<TicketStatus, string> = {
 };
 
 // ---------------------------------------------------------------------------
-// Live announcements
-// ---------------------------------------------------------------------------
-
-export const LIVE_MODES = ["live", "streaming", "both"] as const;
-export type LiveMode = (typeof LIVE_MODES)[number];
-
-export const LIVE_MODE_LABELS: Record<LiveMode, string> = {
-  live: "Going Live only",
-  streaming: "Any stream (Twitch, YouTube, ...)",
-  both: "Both",
-};
-
-// ---------------------------------------------------------------------------
 // Role request streaming profiles
 // ---------------------------------------------------------------------------
 
 export const STREAM_PLATFORMS = [
   "Kick",
   "TikTok",
-  "Facebook Gaming",
 ] as const;
 
 export type StreamPlatform = (typeof STREAM_PLATFORMS)[number];
@@ -156,6 +142,96 @@ export function applyTemplate(
     .replaceAll("{server}", values.server ?? "this server")
     .replaceAll("{membercount}", String(values.membercount ?? 0))
     .replaceAll("{usercount}", String(values.membercount ?? 0));
+}
+
+// ---------------------------------------------------------------------------
+// Owner broadcasts
+// ---------------------------------------------------------------------------
+
+export const BROADCAST_TITLE_MAX = 200;
+export const BROADCAST_MESSAGE_MAX = 1800;
+export const BROADCAST_FOOTER = "GuardBot update";
+
+/** Discord channel types that can receive an announcement embed. */
+export const BROADCAST_TEXT_CHANNEL_TYPES = [0, 5] as const;
+
+export interface BroadcastChannelInfo {
+  id: string;
+  name: string;
+  type: number;
+}
+
+export interface BroadcastGuildInfo {
+  systemChannelId?: string | null;
+  channels: BroadcastChannelInfo[];
+}
+
+const BROADCAST_NAME_HINTS = [
+  "announcement",
+  "announce",
+  "news",
+  "updates",
+  "update",
+  "changelog",
+  "patch",
+  "bot-update",
+];
+
+function broadcastNameScore(name: string): number {
+  const normalized = name.toLowerCase();
+  let score = 0;
+  for (const hint of BROADCAST_NAME_HINTS) {
+    if (normalized.includes(hint)) score = Math.max(score, hint.length);
+  }
+  return score;
+}
+
+/**
+ * Picks the channel a bot update should be posted in for a guild.
+ *
+ * Priority:
+ *  1. the Discord "system messages" channel, when it is a text channel
+ *  2. any announcement (news) channel, preferring a descriptive name
+ *  3. a text channel whose name looks like an update channel
+ *
+ * Returns `null` when the guild has no obvious update destination, so the
+ * caller can skip it instead of posting in a random channel.
+ */
+export function pickBroadcastChannel(guild: BroadcastGuildInfo): BroadcastChannelInfo | null {
+  const usable = guild.channels.filter((channel) =>
+    (BROADCAST_TEXT_CHANNEL_TYPES as readonly number[]).includes(channel.type),
+  );
+  if (usable.length === 0) return null;
+
+  if (guild.systemChannelId) {
+    const systemChannel = usable.find((channel) => channel.id === guild.systemChannelId);
+    if (systemChannel) return systemChannel;
+  }
+
+  const byName = (channels: BroadcastChannelInfo[]): BroadcastChannelInfo[] =>
+    [...channels].sort((a, b) => {
+      const difference = broadcastNameScore(b.name) - broadcastNameScore(a.name);
+      return difference !== 0 ? difference : a.name.localeCompare(b.name);
+    });
+
+  const announcements = usable.filter((channel) => channel.type === 5);
+  if (announcements.length > 0) return byName(announcements)[0] ?? null;
+
+  const named = byName(usable.filter((channel) => broadcastNameScore(channel.name) > 0));
+  return named[0] ?? null;
+}
+
+/** Returns a normalised URL when the value is a public HTTPS URL, otherwise null. */
+export function toHttpsUrl(value: string | null | undefined): string | null {
+  const raw = value?.trim();
+  if (!raw) return null;
+
+  try {
+    const url = new URL(raw);
+    return url.protocol === "https:" ? url.toString() : null;
+  } catch {
+    return null;
+  }
 }
 
 // ---------------------------------------------------------------------------

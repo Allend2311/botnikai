@@ -13,6 +13,7 @@ import { prisma } from "@/lib/prisma";
 import { Badge, Card, EmptyState, Field, Input, Select, Textarea, Toggle } from "@/components/ui";
 import { CheckboxGrid } from "@/components/selects";
 import { SubmitButton } from "@/components/submit-button";
+import { PageHeader, StatusPill } from "@/components/page-header";
 import { WEBSITE_NAME } from "@/lib/brand";
 
 export const dynamic = "force-dynamic";
@@ -51,12 +52,12 @@ export default async function ModerationPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-white">Moderation</h1>
-        <p className="mt-1.5 text-sm text-slate-400">
-          Configure the auto-moderation rules and review what happened in this server.
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="Defense layer"
+        title="Moderation"
+        description="Configure the auto-moderation rules and review what happened in this server."
+        action={<StatusPill label={automod.enabled ? "Automod active" : "Automod off"} tone={automod.enabled ? "emerald" : "amber"} />}
+      />
 
       <form action={saveAutomod.bind(null, guildId)} className="space-y-6">
         <Card
@@ -224,34 +225,59 @@ export default async function ModerationPage({
             description="Ban, kick, timeout and warn actions are recorded here automatically."
           />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-white/5 text-xs uppercase tracking-wider text-slate-500">
-                  <th className="pb-3 pr-4 font-medium">Case</th>
-                  <th className="pb-3 pr-4 font-medium">Type</th>
-                  <th className="pb-3 pr-4 font-medium">Member</th>
-                  <th className="pb-3 pr-4 font-medium">Reason</th>
-                  <th className="pb-3 font-medium">When</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {cases.map((entry) => (
-                  <tr key={entry.id}>
-                    <td className="py-3 pr-4 font-mono text-xs text-slate-500">#{entry.caseNumber}</td>
-                    <td className="py-3 pr-4">
-                      <Badge tone={entry.type === "BAN" || entry.type === "KICK" ? "red" : "amber"}>
-                        {isCaseType(entry.type) ? CASE_LABELS[entry.type] : entry.type}
-                      </Badge>
-                    </td>
-                    <td className="py-3 pr-4 text-slate-300">{entry.targetTag ?? entry.targetId}</td>
-                    <td className="py-3 pr-4 text-slate-400">{entry.reason || "—"}</td>
-                    <td className="py-3 text-xs text-slate-500">{relativeTime(entry.createdAt)}</td>
+          <>
+            <ul className="space-y-2 sm:hidden">
+              {cases.map((entry) => (
+                <li
+                  key={entry.id}
+                  className="rounded-xl border border-white/[0.06] bg-white/[0.018] px-3 py-3"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="font-mono text-[10px] text-slate-500">#{entry.caseNumber}</span>
+                    <Badge tone={entry.type === "BAN" || entry.type === "KICK" ? "red" : "amber"}>
+                      {isCaseType(entry.type) ? CASE_LABELS[entry.type] : entry.type}
+                    </Badge>
+                  </div>
+                  <p className="mt-2 truncate text-xs font-medium text-slate-200">
+                    {entry.targetTag ?? entry.targetId}
+                  </p>
+                  <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-slate-500">
+                    {entry.reason || "No reason provided"}
+                  </p>
+                  <p className="mt-2 text-[10px] text-slate-600">{relativeTime(entry.createdAt)}</p>
+                </li>
+              ))}
+            </ul>
+
+            <div className="hidden overflow-x-auto sm:block">
+              <table className="w-full min-w-[42rem] text-left text-sm">
+                <thead>
+                  <tr className="border-b border-white/5 text-[10px] uppercase tracking-wider text-slate-500">
+                    <th className="pb-3 pr-4 font-medium">Case</th>
+                    <th className="pb-3 pr-4 font-medium">Type</th>
+                    <th className="pb-3 pr-4 font-medium">Member</th>
+                    <th className="pb-3 pr-4 font-medium">Reason</th>
+                    <th className="pb-3 font-medium">When</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {cases.map((entry) => (
+                    <tr key={entry.id}>
+                      <td className="py-3 pr-4 font-mono text-xs text-slate-500">#{entry.caseNumber}</td>
+                      <td className="py-3 pr-4">
+                        <Badge tone={entry.type === "BAN" || entry.type === "KICK" ? "red" : "amber"}>
+                          {isCaseType(entry.type) ? CASE_LABELS[entry.type] : entry.type}
+                        </Badge>
+                      </td>
+                      <td className="py-3 pr-4 text-slate-300">{entry.targetTag ?? entry.targetId}</td>
+                      <td className="py-3 pr-4 text-slate-400">{entry.reason || "—"}</td>
+                      <td className="py-3 text-xs text-slate-500">{relativeTime(entry.createdAt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </Card>
 
@@ -261,12 +287,20 @@ export default async function ModerationPage({
         ) : (
           <ul className="divide-y divide-white/5">
             {warnings.map((warning) => (
-              <li key={warning.id} className="flex items-center gap-4 py-3 first:pt-0 last:pb-0">
-                <Badge tone="amber">Warning</Badge>
-                <span className="min-w-0 flex-1 truncate text-sm text-slate-300">
+              <li
+                key={warning.id}
+                className="flex flex-col gap-1.5 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:gap-4"
+              >
+                <div className="flex items-center gap-2 sm:contents">
+                  <Badge tone="amber">Warning</Badge>
+                  <span className="text-[10px] text-slate-500 sm:hidden">
+                    {relativeTime(warning.createdAt)}
+                  </span>
+                </div>
+                <span className="min-w-0 flex-1 break-words text-xs text-slate-300 sm:truncate sm:text-sm">
                   {warning.userId} — {warning.reason}
                 </span>
-                <span className="shrink-0 text-xs text-slate-500">
+                <span className="hidden shrink-0 text-xs text-slate-500 sm:block">
                   {relativeTime(warning.createdAt)}
                 </span>
               </li>
@@ -278,7 +312,7 @@ export default async function ModerationPage({
       <p className="text-xs text-slate-600">
         Log channel:{" "}
         {settings.modLogChannelId ? (
-          <span className="text-slate-400">#{channelOptions(channels).find((c) => c.value === settings.modLogChannelId)?.label ?? settings.modLogChannelId}</span>
+          <span className="break-all text-slate-400">#{channelOptions(channels).find((c) => c.value === settings.modLogChannelId)?.label ?? settings.modLogChannelId}</span>
         ) : (
           <span className="text-slate-400">not configured</span>
         )}{" "}

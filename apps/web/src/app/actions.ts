@@ -4,19 +4,24 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
   AUTOMOD_ACTIONS,
-  LIVE_MODES,
   STREAM_PLATFORMS,
   type AutomodAction,
-  type LiveMode,
 } from "@guardbot/shared";
 import { Prisma } from "@prisma/client";
 import { WEBSITE_NAME } from "@/lib/brand";
-import { requireGuildAdministrator, requireGuildManager } from "@/lib/auth";
+import { requireBotOwner, requireGuildAdministrator, requireGuildManager } from "@/lib/auth";
 import {
   addGuildMemberRole,
   createChannelMessage,
+  DiscordApiError,
+  editChannelMessage,
+  findRoleRequestMessages,
   getGuildChannels,
   getGuildRoles,
+  getMemberHighestRole,
+  getRoleAssignmentCapabilities,
+  roleAssignmentBlocker,
+  setGuildMemberNickname,
 } from "@/lib/discord";
 import { prisma } from "@/lib/prisma";
 import { destroySession } from "@/lib/session";
@@ -92,74 +97,325 @@ function refresh(guildId: string, ...paths: string[]): void {
   }
 }
 
-export async function approveRoleRequest(
-  guildId: string,
-  requestId: string,
-  formData: FormData,
+async function syncRoleRequestMessage(
+  request: {
+    id: string;
+    applicantId: string;
+    inGameName: string;
+    voucherId: string;
+    evidenceUrl: string | null;
+    reviewChannelId: string | null;
+    reviewMessageId: string | null;
+    createdAt: Date;
+  },
+  status: string,
+  progress: string,
 ): Promise<void> {
-  const { user } = await requireGuildAdministrator(guildId);
-  const roleId = str(formData, "roleId");
-  if (!roleId) {
-    throw new Error("Select a role before approving this request.");
+  if (!request.reviewChannelId) {
+    throw new Error(`Role request ${request.id} has no saved Discord channel, so its message could not be updated.`);
   }
 
-  const roles = await getGuildRoles(guildId);
-  const role = roles.find((candidate) => candidate.id === roleId);
-  if (!role || role.id === guildId || role.managed) {
-    throw new Error("Choose a valid, assignable role from this server.");
+  const payload = {
+    embeds: [
+      {
+        title: status.startsWith("Approved")
+          ? "Role request approved"
+          : status.startsWith("Denied")
+            ? "Role request denied"
+            : "Whitelist Application",
+        color: 0x5865f2,
+        fields: [
+          { name: "Applicant", value: `<@${request.applicantId}>`, inline: true },
+          { name: "In-game name", value: request.inGameName, inline: true },
+          { name: "Vouched by", value: `<@${request.voucherId}>`, inline: true },
+          { name: "Status", value: status },
+          { name: "Progress", value: progress },
+        ],
+        ...(request.evidenceUrl ? { image: { url: request.evidenceUrl } } : {}),
+        timestamp: request.createdAt.toISOString(),
+      },
+    ],
+    components: [],
+  };
+
+  let directUpdateError: unknown;
+  if (request.reviewMessageId) {
+    try {
+      const updated = await editChannelMessage(request.reviewChannelId, request.reviewMessageId, payload);
+      if (updated.components && updated.components.length > 0) {
+        throw new Error("Discord returned the message with interactive components still attached.");
+      }
+      return;
+    } catch (error) {
+      directUpdateError = error;
+    }
   }
 
-  const request = await prisma.roleRequest.findFirst({
-    where: { id: requestId, guildId, status: "PENDING_REVIEW" },
-  });
-  if (!request) {
-    throw new Error("This role request is no longer waiting for review.");
-  }
-
-  const claim = await prisma.roleRequest.updateMany({
-    where: { id: requestId, guildId, status: "PENDING_REVIEW" },
-    data: { status: "APPROVING", roleId },
-  });
-  if (claim.count !== 1) {
-    throw new Error("This role request is already being reviewed.");
-  }
-
+  let fallbackMessageIds: string[];
   try {
-    await addGuildMemberRole(guildId, request.applicantId, roleId);
+    fallbackMessageIds = await findRoleRequestMessages(request.reviewChannelId, request);
   } catch (error) {
-    await prisma.roleRequest.updateMany({
-      where: { id: requestId, guildId, status: "APPROVING" },
-      data: { status: "PENDING_REVIEW" },
-    });
     throw new Error(
-      `Could not give the role. Check that the bot has Manage Roles and its highest role is above the requested role. ${
-        error instanceof Error ? error.message : ""
-      }`.trim(),
+      `The role was processed, but Discord message lookup failed: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
     );
   }
 
-  await prisma.roleRequest.update({
-    where: { id: requestId },
-    data: { status: "APPROVED", decidedBy: user.discordId, decidedAt: new Date() },
-  });
-  refresh(guildId, "role-requests");
-}
-
-export async function denyRoleRequest(guildId: string, requestId: string): Promise<void> {
-  const { user } = await requireGuildAdministrator(guildId);
-  const result = await prisma.roleRequest.updateMany({
-    where: { id: requestId, guildId, status: "PENDING_REVIEW" },
-    data: { status: "DENIED", decidedBy: user.discordId, decidedAt: new Date() },
-  });
-
-  if (result.count !== 1) {
-    throw new Error("This role request is no longer waiting for review.");
+  const messageIds = fallbackMessageIds.length > 0
+    ? fallbackMessageIds
+    : request.reviewMessageId
+      ? [request.reviewMessageId]
+      : [];
+  if (messageIds.length === 0) {
+    throw new Error(
+      `The role was processed, but the request message was not found in channel ${request.reviewChannelId}.`,
+    );
   }
 
-  refresh(guildId, "role-requests");
+  const updateErrors: string[] = [];
+  let updatedMessageId: string | null = null;
+  for (const messageId of messageIds) {
+    try {
+      const updated = await editChannelMessage(request.reviewChannelId, messageId, payload);
+      if (updated.components && updated.components.length > 0) {
+        throw new Error("Discord returned the message with interactive components still attached.");
+      }
+      updatedMessageId ??= messageId;
+    } catch (error) {
+      updateErrors.push(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  if (!updatedMessageId) {
+    const reason = updateErrors[0] ?? (directUpdateError instanceof Error ? directUpdateError.message : "Unknown Discord API error");
+    throw new Error(`The role was processed, but Discord did not update the request message: ${reason}`);
+  }
+
+  await prisma.roleRequest.update({
+    where: { id: request.id },
+    data: { reviewMessageId: updatedMessageId },
+  });
+}
+
+export interface RoleRequestActionState {
+  status: "idle" | "success" | "error";
+  message: string;
+}
+
+function actionErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message;
+  const text = String(error);
+  return text && text !== "[object Object]" ? text : "Something went wrong. Please try again.";
+}
+
+function roleGrantErrorMessage(error: unknown): string {
+  if (error instanceof DiscordApiError) {
+    if (error.status === 401) {
+      return "Discord rejected the bot token. Check that DISCORD_TOKEN is set correctly in the deployment environment.";
+    }
+    if (error.code === 50013 || error.status === 403) {
+      return "Discord refused the role change (Missing Permissions). The bot needs the Manage Roles permission, and its own role must be above the role you are assigning.";
+    }
+    if (error.code === 10007 || error.status === 404) {
+      return "That member is no longer in this server.";
+    }
+    if (error.code === 10011) {
+      return "That role no longer exists in this server. Pick another role and try again.";
+    }
+  }
+
+  return `Discord could not assign the role: ${actionErrorMessage(error)}`;
+}
+
+function nicknameErrorMessage(error: unknown): string {
+  if (error instanceof DiscordApiError) {
+    if (error.code === 50013 || error.status === 403) {
+      return "Discord refused the nickname change (Missing Permissions). The bot needs Manage Nicknames, and its own role must be above the applicant's highest role.";
+    }
+    if (error.code === 10007 || error.status === 404) {
+      return "That member is no longer in this server.";
+    }
+  }
+
+  return actionErrorMessage(error);
+}
+
+export async function approveRoleRequest(
+  guildId: string,
+  requestId: string,
+  _previousState: RoleRequestActionState,
+  formData: FormData,
+): Promise<RoleRequestActionState> {
+  try {
+    const { user } = await requireGuildAdministrator(guildId);
+    const roleId = str(formData, "roleId");
+    if (!roleId) {
+      return { status: "error", message: "Select a role before approving this request." };
+    }
+
+    const roles = await getGuildRoles(guildId);
+    const role = roles.find((candidate) => candidate.id === roleId);
+    if (!role) {
+      return { status: "error", message: "Choose a valid, assignable role from this server." };
+    }
+
+    const capabilities = await getRoleAssignmentCapabilities(guildId, roles);
+    const blocker = roleAssignmentBlocker(role, capabilities, guildId);
+    if (blocker) {
+      return { status: "error", message: blocker };
+    }
+
+    const request = await prisma.roleRequest.findFirst({
+      where: { id: requestId, guildId, status: "PENDING_REVIEW" },
+    });
+    if (!request) {
+      return { status: "error", message: "This role request is no longer waiting for review." };
+    }
+
+    const claim = await prisma.roleRequest.updateMany({
+      where: { id: requestId, guildId, status: "PENDING_REVIEW" },
+      data: { status: "APPROVING", roleId },
+    });
+    if (claim.count !== 1) {
+      return { status: "error", message: "This role request is already being reviewed." };
+    }
+
+    try {
+      await addGuildMemberRole(guildId, request.applicantId, roleId);
+    } catch (error) {
+      await prisma.roleRequest
+        .updateMany({
+          where: { id: requestId, guildId, status: "APPROVING" },
+          data: { status: "PENDING_REVIEW" },
+        })
+        .catch(() => undefined);
+      console.error(
+        `[role-requests] Could not assign role ${roleId} to ${request.applicantId} in ${guildId}:`,
+        error,
+      );
+      return { status: "error", message: roleGrantErrorMessage(error) };
+    }
+
+    let nicknameError: string | null = null;
+    const applicantIsOwner = capabilities.ownerId === request.applicantId;
+    const applicantHighestRole =
+      applicantIsOwner || request.inGameName.length > 32
+        ? null
+        : await getMemberHighestRole(guildId, request.applicantId, roles);
+
+    if (applicantIsOwner) {
+      nicknameError = "Discord does not allow changing the server owner's nickname";
+    } else if (request.inGameName.length > 32) {
+      nicknameError = "the requested in-game name exceeds Discord's 32-character nickname limit";
+    } else if (applicantHighestRole === null) {
+      nicknameError = "that member is no longer in this server";
+    } else if (!capabilities.hasManageNicknames && !capabilities.hasAdministrator) {
+      nicknameError = "the bot needs the Manage Nicknames permission";
+    } else if (applicantHighestRole.position >= capabilities.highestRolePosition) {
+      nicknameError = `the applicant's highest role “${applicantHighestRole.name}” (position ${applicantHighestRole.position}) is not below the bot's highest role “${capabilities.highestRoleName}” (position ${capabilities.highestRolePosition}), so Discord does not allow the bot to change their nickname. Give the bot an additional role above “${applicantHighestRole.name}” in Server Settings → Roles to enable nickname changes`;
+    } else {
+      try {
+        await setGuildMemberNickname(guildId, request.applicantId, request.inGameName);
+      } catch (error) {
+        nicknameError = nicknameErrorMessage(error);
+        console.warn(
+          `[role-requests] Role ${roleId} was granted, but nickname could not be changed for request ${requestId}:`,
+          error,
+        );
+      }
+    }
+
+    await prisma.roleRequest.update({
+      where: { id: requestId },
+      data: { status: "APPROVED", decidedBy: user.discordId, decidedAt: new Date() },
+    });
+
+    let messageWarning = "";
+    try {
+      await syncRoleRequestMessage(
+        request,
+        nicknameError
+          ? `Approved by <@${user.discordId}> — <@&${roleId}> granted; nickname not changed: ${nicknameError}`
+          : `Approved by <@${user.discordId}> — <@&${roleId}> granted; nickname set to ${request.inGameName}`,
+        "● ● ● Administrator approved",
+      );
+    } catch (error) {
+      messageWarning = actionErrorMessage(error);
+      console.error(
+        `[role-requests] Role ${roleId} was granted for request ${requestId}, but the Discord review message could not be updated:`,
+        error,
+      );
+    }
+
+    refresh(guildId, "role-requests");
+
+    const granted = `Role “${role.name}” granted to ${request.applicantName}.`;
+    return {
+      status: "success",
+      message: messageWarning
+        ? `${granted} The Discord review message could not be updated: ${messageWarning}`
+        : granted,
+    };
+  } catch (error) {
+    console.error(`[role-requests] Approve failed for request ${requestId} in ${guildId}:`, error);
+    return { status: "error", message: actionErrorMessage(error) };
+  }
+}
+
+export async function denyRoleRequest(
+  guildId: string,
+  requestId: string,
+  _previousState: RoleRequestActionState,
+): Promise<RoleRequestActionState> {
+  try {
+    const { user } = await requireGuildAdministrator(guildId);
+    const request = await prisma.roleRequest.findFirst({
+      where: { id: requestId, guildId, status: "PENDING_REVIEW" },
+    });
+    if (!request) {
+      return { status: "error", message: "This role request is no longer waiting for review." };
+    }
+
+    const result = await prisma.roleRequest.updateMany({
+      where: { id: requestId, guildId, status: "PENDING_REVIEW" },
+      data: { status: "DENIED", decidedBy: user.discordId, decidedAt: new Date() },
+    });
+
+    if (result.count !== 1) {
+      return { status: "error", message: "This role request is no longer waiting for review." };
+    }
+
+    let messageWarning = "";
+    try {
+      await syncRoleRequestMessage(
+        request,
+        `Denied by <@${user.discordId}>`,
+        "● ● ✗ Administrator denied",
+      );
+    } catch (error) {
+      messageWarning = actionErrorMessage(error);
+      console.error(
+        `[role-requests] Request ${requestId} was denied, but the Discord review message could not be updated:`,
+        error,
+      );
+    }
+
+    refresh(guildId, "role-requests");
+    return {
+      status: "success",
+      message: messageWarning
+        ? `Request denied. The Discord review message could not be updated: ${messageWarning}`
+        : "Request denied.",
+    };
+  } catch (error) {
+    console.error(`[role-requests] Deny failed for request ${requestId} in ${guildId}:`, error);
+    return { status: "error", message: actionErrorMessage(error) };
+  }
 }
 
 export async function addLiveStreamAccount(guildId: string, formData: FormData): Promise<void> {
+  await requireBotOwner();
   await requireGuildManager(guildId);
   const platform = str(formData, "platform");
   const username = str(formData, "username").replace(/^@+/, "");
@@ -184,6 +440,7 @@ export async function addLiveStreamAccount(guildId: string, formData: FormData):
 }
 
 export async function removeLiveStreamAccount(guildId: string, accountId: string): Promise<void> {
+  await requireBotOwner();
   await requireGuildManager(guildId);
   const result = await prisma.liveStreamAccount.deleteMany({ where: { id: accountId, guildId } });
   if (result.count !== 1) {
@@ -191,6 +448,129 @@ export async function removeLiveStreamAccount(guildId: string, accountId: string
   }
 
   refresh(guildId, "notifications");
+}
+
+// ---------------------------------------------------------------------------
+// Message templates
+// ---------------------------------------------------------------------------
+
+export interface MessageTemplateActionState {
+  status: "idle" | "success" | "error";
+  message: string;
+  templateId?: string;
+}
+
+export async function saveMessageTemplate(
+  guildId: string,
+  templateId: string | null,
+  _previousState: MessageTemplateActionState,
+  formData: FormData,
+): Promise<MessageTemplateActionState> {
+  await requireGuildManager(guildId);
+
+  const name = str(formData, "name");
+  const contentValue = formData.get("content");
+  const content = typeof contentValue === "string" ? contentValue : "";
+  const embedTitle = str(formData, "embedTitle");
+  const embedDescriptionValue = formData.get("embedDescription");
+  const embedDescription = typeof embedDescriptionValue === "string" ? embedDescriptionValue : "";
+
+  if (!name || name.length > 80) {
+    return { status: "error", message: "Template name must be between 1 and 80 characters." };
+  }
+  if (content.length > 2000) {
+    return { status: "error", message: "Message content cannot exceed 2,000 characters." };
+  }
+  if (embedTitle.length > 256) {
+    return { status: "error", message: "Embed title cannot exceed 256 characters." };
+  }
+  if (embedDescription.length > 4096) {
+    return { status: "error", message: "Embed description cannot exceed 4,096 characters." };
+  }
+  if (!content.trim() && !embedTitle && !embedDescription.trim()) {
+    return { status: "error", message: "Add message content or an embed before saving." };
+  }
+
+  const data = {
+    name,
+    content,
+    embedTitle: nullable(embedTitle),
+    embedDescription: nullable(embedDescription),
+  };
+
+  if (templateId) {
+    const existing = await prisma.messageTemplate.findFirst({
+      where: { id: templateId, guildId },
+      select: { id: true },
+    });
+    if (!existing) {
+      return { status: "error", message: "This template was not found in this server." };
+    }
+
+    const saved = await prisma.messageTemplate.update({
+      where: { id: existing.id },
+      data,
+      select: { id: true },
+    });
+    refresh(guildId, "messages");
+    return { status: "success", message: "Template saved.", templateId: saved.id };
+  }
+
+  const templateCount = await prisma.messageTemplate.count({ where: { guildId } });
+  if (templateCount >= 100) {
+    return { status: "error", message: "This server has reached the 100-template limit." };
+  }
+
+  const saved = await prisma.messageTemplate.create({
+    data: { guildId, ...data },
+    select: { id: true },
+  });
+  refresh(guildId, "messages");
+  return { status: "success", message: "Template created.", templateId: saved.id };
+}
+
+export async function sendMessageTemplate(
+  guildId: string,
+  templateId: string,
+  _previousState: MessageTemplateActionState,
+  formData: FormData,
+): Promise<MessageTemplateActionState> {
+  await requireGuildManager(guildId);
+
+  const channelId = str(formData, "channelId");
+  if (!channelId) {
+    return { status: "error", message: "Choose a channel first." };
+  }
+
+  const template = await prisma.messageTemplate.findFirst({
+    where: { id: templateId, guildId },
+  });
+  if (!template) {
+    return { status: "error", message: "This template was not found in this server." };
+  }
+
+  const channels = await getGuildChannels(guildId);
+  const channel = channels.find((item) => item.id === channelId);
+  if (!channel || ![0, 5].includes(channel.type)) {
+    return { status: "error", message: "Choose a text or announcement channel in this server." };
+  }
+
+  const embeds = template.embedTitle || template.embedDescription
+    ? [{
+        color: 0x6366f1,
+        ...(template.embedTitle ? { title: template.embedTitle } : {}),
+        ...(template.embedDescription ? { description: template.embedDescription } : {}),
+        footer: { text: template.name },
+      }]
+    : undefined;
+
+  await createChannelMessage(channelId, {
+    ...(template.content ? { content: template.content } : {}),
+    ...(embeds ? { embeds } : {}),
+    allowedMentions: { parse: [] },
+  });
+
+  return { status: "success", message: `“${template.name}” sent to #${channel.name}.` };
 }
 
 // ---------------------------------------------------------------------------
@@ -324,19 +704,15 @@ export async function removeReactionRole(guildId: string, roleId: string): Promi
 // ---------------------------------------------------------------------------
 
 export async function saveNotifications(guildId: string, formData: FormData): Promise<void> {
+  await requireBotOwner();
   await requireGuildManager(guildId);
-
-  const mode = str(formData, "liveMode");
-  const liveMode: LiveMode = (LIVE_MODES as readonly string[]).includes(mode)
-    ? (mode as LiveMode)
-    : "both";
 
   const data = {
     liveEnabled: bool(formData, "liveEnabled"),
     liveChannelId: nullable(str(formData, "liveChannelId")),
     liveRoleId: nullable(str(formData, "liveRoleId")),
-    livePingUser: bool(formData, "livePingUser"),
-    liveMode,
+    livePingEveryone: bool(formData, "livePingEveryone"),
+    livePingHere: bool(formData, "livePingHere"),
     liveAnnounceEnd: bool(formData, "liveAnnounceEnd"),
     liveIncludeUrl: bool(formData, "liveIncludeUrl"),
     postEnabled: bool(formData, "postEnabled"),
@@ -344,6 +720,8 @@ export async function saveNotifications(guildId: string, formData: FormData): Pr
     postWatchChannelId: nullable(str(formData, "postWatchChannelId")),
     postChannelId: nullable(str(formData, "postChannelId")),
     postRoleId: nullable(str(formData, "postRoleId")),
+    postPingEveryone: bool(formData, "postPingEveryone"),
+    postPingHere: bool(formData, "postPingHere"),
     postPingAuthor: bool(formData, "postPingAuthor"),
     postIncludeContent: bool(formData, "postIncludeContent"),
   };
@@ -355,74 +733,6 @@ export async function saveNotifications(guildId: string, formData: FormData): Pr
   });
 
   refresh(guildId, "notifications");
-}
-
-async function sendNotificationPingTest(
-  guildId: string,
-  kind: "live" | "post",
-): Promise<void> {
-  const { user } = await requireGuildManager(guildId);
-
-  const settings = await prisma.guildSettings.findUnique({ where: { guildId } });
-  const channelId = kind === "live" ? settings?.liveChannelId : settings?.postChannelId;
-  const roleId = kind === "live" ? settings?.liveRoleId : settings?.postRoleId;
-  const pingUser =
-    kind === "live"
-      ? settings?.livePingUser
-      : settings?.postPingAuthor;
-
-  if (!channelId) {
-    throw new Error(`Set the ${kind === "live" ? "live" : "post"} announcement channel before testing.`);
-  }
-
-  const [channels, roles] = await Promise.all([
-    getGuildChannels(guildId),
-    roleId ? getGuildRoles(guildId) : Promise.resolve([]),
-  ]);
-  const channel = channels.find(
-    (candidate) =>
-      candidate.id === channelId &&
-      candidate.guild_id === guildId &&
-      (candidate.type === 0 || candidate.type === 5),
-  );
-  if (!channel) {
-    throw new Error("The configured announcement channel is unavailable or is not a text channel.");
-  }
-
-  if (roleId && !roles.some((role) => role.id === roleId)) {
-    throw new Error("The configured ping role no longer exists. Update it in Notifications before testing.");
-  }
-
-  const isLive = kind === "live";
-  const userMention = pingUser ? `<@${user.discordId}>` : "";
-  const roleMention = roleId ? `<@&${roleId}>` : "";
-  await createChannelMessage(channelId, {
-    content: [roleMention, userMention].filter(Boolean).join(" ") || undefined,
-    embeds: [
-      {
-        title: isLive ? "Test live announcement" : "Test post announcement",
-        description: isLive
-          ? "This is a test of the configured live announcement ping."
-          : "This is a test of the configured new post announcement ping.",
-        color: isLive ? 0xef4444 : 0x8b5cf6,
-        footer: { text: "Configuration test — no real stream or post was detected." },
-        timestamp: new Date().toISOString(),
-      },
-    ],
-    allowed_mentions: {
-      parse: [],
-      roles: roleId ? [roleId] : [],
-      users: pingUser ? [user.discordId] : [],
-    },
-  });
-}
-
-export async function testLivePing(guildId: string): Promise<void> {
-  await sendNotificationPingTest(guildId, "live");
-}
-
-export async function testPostPing(guildId: string): Promise<void> {
-  await sendNotificationPingTest(guildId, "post");
 }
 
 // ---------------------------------------------------------------------------

@@ -1,8 +1,8 @@
 import type { Client, Presence } from "discord.js";
-import type { LiveMode } from "@guardbot/shared";
+import { prisma } from "../lib/db";
 import { logger } from "../lib/logger";
 import { getGuildSettings } from "../lib/settings";
-import { activityMatchesMode, announceLive, announceLiveEnded, findLiveActivity } from "../services/live";
+import { announceLive, announceLiveEnded, findLiveActivity } from "../services/live";
 
 export async function onPresenceUpdate(
   client: Client,
@@ -21,12 +21,17 @@ export async function onPresenceUpdate(
   const member = guild.members.cache.get(newPresence.userId);
   if (!member || member.user.bot) return;
 
-  const mode = (settings.liveMode as LiveMode) ?? "both";
-  const previousActivity = findLiveActivity(oldPresence?.activities ?? []);
-  const currentActivity = findLiveActivity(newPresence.activities ?? []);
+  const accounts = await prisma.liveStreamAccount.findMany({
+    where: { guildId, platform: { in: ["Kick", "TikTok"] } },
+    select: { platform: true, username: true },
+  });
+  if (accounts.length === 0) return;
 
-  const wasLive = Boolean(previousActivity && activityMatchesMode(previousActivity, mode));
-  const isLive = Boolean(currentActivity && activityMatchesMode(currentActivity, mode));
+  const previousActivity = findLiveActivity(oldPresence?.activities ?? [], accounts);
+  const currentActivity = findLiveActivity(newPresence.activities ?? [], accounts);
+
+  const wasLive = Boolean(previousActivity);
+  const isLive = Boolean(currentActivity);
 
   try {
     if (isLive && !wasLive && currentActivity) {

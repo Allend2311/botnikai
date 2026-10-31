@@ -66,10 +66,10 @@ export function ImageUploadField({
             void uploadFile(event.currentTarget.files?.[0]);
             event.currentTarget.value = "";
           }}
-          className="block w-full min-w-0 rounded-lg border border-white/10 bg-ink-950/70 text-sm text-slate-300 file:mr-3 file:border-0 file:bg-white/5 file:px-3 file:py-2 file:text-sm file:text-slate-200 disabled:opacity-60"
+          className="block w-full min-w-0 rounded-xl border border-white/[0.09] bg-white/[0.028] text-xs text-slate-300 transition file:mr-3 file:border-0 file:border-r file:border-white/[0.08] file:bg-brand-500/10 file:px-3 file:py-3 file:text-xs file:font-medium file:text-brand-200 hover:border-white/15 disabled:opacity-60 sm:text-sm"
         />
       </div>
-      <label htmlFor={`${name}-url`} className="block text-xs font-medium text-slate-400">
+      <label htmlFor={`${name}-url`} className="block text-[11px] font-medium text-slate-400 sm:text-xs">
         Or paste a public HTTPS image URL
       </label>
       <input
@@ -81,7 +81,7 @@ export function ImageUploadField({
           setPreviewFailed(false);
         }}
         placeholder="https://example.com/image.gif"
-        className="w-full rounded-lg border border-white/10 bg-ink-950/70 px-3 py-2 text-sm text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30"
+        className="w-full rounded-xl border border-white/[0.09] bg-white/[0.028] px-3.5 py-3 text-base text-slate-100 outline-none transition placeholder:text-slate-600 hover:border-white/15 focus:border-brand-400/70 focus:ring-4 focus:ring-brand-500/15 sm:py-2.5 sm:text-sm"
       />
       <p aria-live="polite" className="text-xs text-slate-500">
         {message || "Choose a PNG, JPEG, WebP, or GIF file up to 8 MB."}

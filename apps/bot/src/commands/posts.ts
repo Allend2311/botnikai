@@ -51,6 +51,18 @@ export const postConfigCommand: Command = {
         .setDescription("Set the role that gets pinged")
         .addRoleOption((option) => option.setName("role").setDescription("The role to ping").setRequired(true)),
     )
+    .addSubcommand((sub) =>
+      sub
+        .setName("everyone")
+        .setDescription("Toggle @everyone on post announcements")
+        .addBooleanOption((option) => option.setName("enabled").setDescription("Enable the ping").setRequired(true)),
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName("here")
+        .setDescription("Toggle @here on post announcements")
+        .addBooleanOption((option) => option.setName("enabled").setDescription("Enable the ping").setRequired(true)),
+    )
     .addSubcommand((sub) => sub.setName("enable").setDescription("Enable the notifications"))
     .addSubcommand((sub) => sub.setName("disable").setDescription("Disable the notifications"))
     .addSubcommand((sub) => sub.setName("status").setDescription("Show the current configuration"))
@@ -109,6 +121,18 @@ export const postConfigCommand: Command = {
       return;
     }
 
+    if (sub === "everyone" || sub === "here") {
+      const enabled = interaction.options.getBoolean("enabled", true);
+      const field = sub === "everyone" ? "postPingEveryone" : "postPingHere";
+      await prisma.guildSettings.update({ where: { guildId: guild.id }, data: { [field]: enabled } });
+      invalidateConfigCache(guild.id);
+      await interaction.reply({
+        embeds: [successEmbed(`${sub === "everyone" ? "@everyone" : "@here"} ping ${enabled ? "enabled" : "disabled"}`)],
+        ephemeral: true,
+      });
+      return;
+    }
+
     if (sub === "enable") {
       await prisma.guildSettings.update({ where: { guildId: guild.id }, data: { postEnabled: true } });
       invalidateConfigCache(guild.id);
@@ -146,6 +170,8 @@ export const postConfigCommand: Command = {
               inline: true,
             },
             { name: "Ping role", value: settings.postRoleId ? `<@&${settings.postRoleId}>` : "Not set", inline: true },
+            { name: "@everyone", value: settings.postPingEveryone ? "Enabled" : "Disabled", inline: true },
+            { name: "@here", value: settings.postPingHere ? "Enabled" : "Disabled", inline: true },
           ],
           footer: { text: "GuardBot" },
         },
@@ -185,6 +211,10 @@ export const postTestCommand: Command = {
       authorTag: interaction.user.tag,
       content: "This is what a new post announcement looks like.",
       url: `https://discord.com/channels/${guild.id}/${interaction.channelId}`,
+      roleId: settings.postRoleId,
+      pingEveryone: settings.postPingEveryone,
+      pingHere: settings.postPingHere,
+      pingAuthor: settings.postPingAuthor,
     });
 
     await interaction.reply({

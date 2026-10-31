@@ -6,6 +6,7 @@ import { inviteUrl } from "@/lib/discord";
 import { Card, Field, Input } from "@/components/ui";
 import { ChannelSelect } from "@/components/selects";
 import { SubmitButton } from "@/components/submit-button";
+import { PageHeader } from "@/components/page-header";
 
 export const dynamic = "force-dynamic";
 
@@ -23,12 +24,11 @@ export default async function SettingsPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-white">Settings</h1>
-        <p className="mt-1.5 text-sm text-slate-400">
-          Logging destinations and general information about this server.
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="Configuration"
+        title="Settings"
+        description="Logging destinations and general information about this server."
+      />
 
       <form action={saveGeneralSettings.bind(null, guildId)} className="space-y-6">
         <Card title="Log channels" description={`Where ${WEBSITE_NAME} writes its activity.`}>
@@ -66,29 +66,35 @@ export default async function SettingsPage({
       </form>
 
       <Card title="Server" description="Information fetched from Discord.">
-        <dl className="space-y-3 text-sm">
-          <div className="flex items-center justify-between gap-4">
-            <dt className="text-slate-500">Name</dt>
-            <dd className="text-slate-200">{guild.name}</dd>
-          </div>
-          <div className="flex items-center justify-between gap-4">
-            <dt className="text-slate-500">Server ID</dt>
-            <dd className="font-mono text-xs text-slate-400">{guild.id}</dd>
-          </div>
-          <div className="flex items-center justify-between gap-4">
-            <dt className="text-slate-500">Members</dt>
-            <dd className="text-slate-200">{guild.approximate_member_count ?? 0}</dd>
-          </div>
-          <div className="flex items-center justify-between gap-4">
-            <dt className="text-slate-500">Your access</dt>
-            <dd className="text-slate-200">
-              {context.isMember
+        <dl className="divide-y divide-white/[0.06]">
+          {[
+            { label: "Name", value: guild.name, mono: false },
+            { label: "Server ID", value: guild.id, mono: true },
+            { label: "Members", value: (guild.approximate_member_count ?? 0).toLocaleString(), mono: false },
+            {
+              label: "Your access",
+              value: context.isMember
                 ? context.canManage
                   ? "Manage Server"
                   : "Member (read only)"
-                : "Not a member"}
-            </dd>
-          </div>
+                : "Not a member",
+              mono: false,
+            },
+          ].map((row) => (
+            <div
+              key={row.label}
+              className="flex flex-col gap-1 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+            >
+              <dt className="text-xs text-slate-500 sm:text-sm">{row.label}</dt>
+              <dd
+                className={`break-all text-xs text-slate-200 sm:text-right sm:text-sm ${
+                  row.mono ? "font-mono text-slate-400" : ""
+                }`}
+              >
+                {row.value}
+              </dd>
+            </div>
+          ))}
         </dl>
       </Card>
 
