@@ -192,7 +192,7 @@ const FAQS = (name: string) => [
   },
   {
     q: "Where is my data stored?",
-    a: "In a SQLite database that ships with the project. The schema is PostgreSQL ready, so you can move to a hosted database without changing a single line of application code.",
+    a: "In a shared PostgreSQL database (Prisma Postgres). Server settings, moderation history, tickets and message templates are stored there for both the bot and the dashboard.",
   },
   {
     q: "How do live notifications work?",
@@ -296,79 +296,80 @@ export default async function HomePage({
         )}
 
         {/* Hero */}
-        <section className="relative px-4 pb-16 pt-14 sm:px-6 sm:pt-20 lg:px-8 lg:pt-24">
+        <section className="landing-hero relative isolate px-4 pb-16 pt-14 sm:px-6 sm:pt-20 lg:px-8 lg:pb-20 lg:pt-24">
           <div
             className="pointer-events-none absolute left-1/2 top-0 -z-10 h-[34rem] w-[min(90rem,140vw)] -translate-x-1/2 rounded-full bg-[radial-gradient(closest-side,rgba(34,211,238,0.14),rgba(99,102,241,0.12)_45%,transparent_75%)] blur-2xl"
             aria-hidden="true"
           />
 
-          <div className="mx-auto max-w-5xl text-center">
-            <div className="mx-auto inline-flex items-center gap-2.5 rounded-full border border-cyan-400/25 bg-cyan-400/[0.06] px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-cyan-200 shadow-lg shadow-cyan-500/5 sm:text-[11px]">
-              <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan-400 opacity-60" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-cyan-400" />
-              </span>
-              Next-gen Discord security system
-              <span className="hidden h-3 w-px bg-cyan-300/25 sm:block" />
-              <span className="hidden font-mono text-[10px] font-normal tracking-normal text-cyan-300/70 sm:block">
-                v2.0
-              </span>
-            </div>
-
-            <h1 className="mx-auto mt-7 max-w-5xl text-[clamp(2.15rem,10vw,2.65rem)] font-bold leading-[1.02] tracking-[-0.04em] text-white sm:text-6xl lg:text-7xl xl:text-[5.25rem]">
-              <span className="block">Command Your</span>
-              <span className="text-gradient text-shadow-glow mt-1 block pb-1">Digital Realm</span>
-            </h1>
-
-            <p className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-slate-300/90 sm:mt-7 sm:text-lg lg:text-xl">
-              {WEBSITE_DESCRIPTION}
-            </p>
-
-            <div className="mx-auto mt-9 flex w-full max-w-md flex-col items-stretch gap-3 sm:max-w-none sm:flex-row sm:items-center sm:justify-center">
-              <a
-                href={inviteUrl()}
-                className="group relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-r from-cyan-600 via-brand-600 to-violet-600 px-7 py-3.5 text-sm font-semibold text-white shadow-2xl shadow-cyan-500/25 transition-all duration-300 hover:scale-[1.02] hover:shadow-cyan-500/40"
-              >
-                <span className="relative z-10">Deploy {WEBSITE_NAME}</span>
-                <svg viewBox="0 0 24 24" className="relative z-10 h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                  <path d="M5 12h14m-6-6 6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
-              </a>
-              <Link
-                href="/dashboard"
-                className="btn btn-ghost group px-7 py-3.5"
-              >
-                <span className="flex h-5 w-5 items-center justify-center rounded-md border border-white/15 bg-white/5" aria-hidden="true">
-                  <span className="h-1.5 w-1.5 rounded-sm bg-cyan-300 shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
+          <div className="mx-auto grid w-full max-w-7xl items-center gap-12 lg:grid-cols-[0.82fr_1.18fr] lg:gap-10">
+            <div className="max-w-2xl text-center lg:text-left">
+              <div className="inline-flex items-center gap-2.5 rounded-full border border-cyan-400/25 bg-cyan-400/[0.06] px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-cyan-200 shadow-lg shadow-cyan-500/5 sm:text-[11px]">
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan-400 opacity-60" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-cyan-400" />
                 </span>
-                Access Command Center
-              </Link>
-            </div>
+                Next-gen Discord security system
+                <span className="hidden h-3 w-px bg-cyan-300/25 sm:block" />
+                <span className="hidden font-mono text-[10px] font-normal tracking-normal text-cyan-300/70 sm:block">
+                  v2.0
+                </span>
+              </div>
 
-            <div className="mt-7 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[11px] text-slate-500 sm:text-xs">
-              <span className="inline-flex items-center gap-1.5">
-                <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 text-emerald-400" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="m4 12 5 5L20 6" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                No credit card
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 text-emerald-400" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="m4 12 5 5L20 6" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                Self-hosted
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 text-emerald-400" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="m4 12 5 5L20 6" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                Ready in minutes
-              </span>
+              <h1 className="mt-7 text-[clamp(2.7rem,8vw,3.8rem)] font-bold leading-[0.98] tracking-[-0.055em] text-white sm:text-6xl lg:text-[4.5rem] xl:text-[5.1rem]">
+                <span className="block">Your server,</span>
+                <span className="text-gradient text-shadow-glow mt-2 block pb-1">under control.</span>
+              </h1>
+
+              <p className="mx-auto mt-6 max-w-xl text-base leading-relaxed text-slate-300/90 sm:mt-7 sm:text-lg lg:mx-0 lg:text-xl">
+                {WEBSITE_DESCRIPTION}
+              </p>
+
+              <div className="mx-auto mt-9 flex w-full max-w-md flex-col items-stretch gap-3 sm:max-w-none sm:flex-row sm:items-center sm:justify-center lg:mx-0 lg:justify-start">
+                <a
+                  href={inviteUrl()}
+                  className="group relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-r from-cyan-600 via-brand-600 to-violet-600 px-7 py-3.5 text-sm font-semibold text-white shadow-2xl shadow-cyan-500/25 transition-all duration-300 hover:scale-[1.02] hover:shadow-cyan-500/40"
+                >
+                  <span className="relative z-10">Deploy {WEBSITE_NAME}</span>
+                  <svg viewBox="0 0 24 24" className="relative z-10 h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                    <path d="M5 12h14m-6-6 6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
+                </a>
+                <Link
+                  href="/dashboard"
+                  className="btn btn-ghost group px-7 py-3.5"
+                >
+                  <span className="flex h-5 w-5 items-center justify-center rounded-md border border-white/15 bg-white/5" aria-hidden="true">
+                    <span className="h-1.5 w-1.5 rounded-sm bg-cyan-300 shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
+                  </span>
+                  Access Command Center
+                </Link>
+              </div>
+
+              <div className="mt-7 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[11px] text-slate-500 sm:text-xs lg:justify-start">
+                <span className="inline-flex items-center gap-1.5">
+                  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 text-emerald-400" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="m4 12 5 5L20 6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  No credit card
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 text-emerald-400" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="m4 12 5 5L20 6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  Self-hosted
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 text-emerald-400" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="m4 12 5 5L20 6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  Ready in minutes
+                </span>
+              </div>
             </div>
+            <HeroConsole />
           </div>
-
-          <HeroConsole />
 
           <dl className="mx-auto mt-12 grid max-w-5xl grid-cols-2 gap-3 sm:mt-16 sm:grid-cols-4 sm:gap-0 sm:divide-x sm:divide-white/[0.07] sm:overflow-hidden sm:rounded-2xl sm:border sm:border-white/[0.08] sm:bg-white/[0.02] sm:backdrop-blur-xl">
             {stats.map((stat) => (

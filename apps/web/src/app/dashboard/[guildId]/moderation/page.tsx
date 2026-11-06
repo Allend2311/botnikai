@@ -234,7 +234,7 @@ export default async function ModerationPage({
                 >
                   <div className="flex items-center justify-between gap-3">
                     <span className="font-mono text-[10px] text-slate-500">#{entry.caseNumber}</span>
-                    <Badge tone={entry.type === "BAN" || entry.type === "KICK" ? "red" : "amber"}>
+                    <Badge tone={entry.type === "BAN" || entry.type === "SOFTBAN" || entry.type === "KICK" ? "red" : "amber"}>
                       {isCaseType(entry.type) ? CASE_LABELS[entry.type] : entry.type}
                     </Badge>
                   </div>
@@ -265,7 +265,7 @@ export default async function ModerationPage({
                     <tr key={entry.id}>
                       <td className="py-3 pr-4 font-mono text-xs text-slate-500">#{entry.caseNumber}</td>
                       <td className="py-3 pr-4">
-                        <Badge tone={entry.type === "BAN" || entry.type === "KICK" ? "red" : "amber"}>
+                        <Badge tone={entry.type === "BAN" || entry.type === "SOFTBAN" || entry.type === "KICK" ? "red" : "amber"}>
                           {isCaseType(entry.type) ? CASE_LABELS[entry.type] : entry.type}
                         </Badge>
                       </td>

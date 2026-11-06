@@ -5,6 +5,7 @@ import { registerEvents } from "./events";
 import { prisma } from "./lib/db";
 import { logger } from "./lib/logger";
 import { registerCommands } from "./lib/registerCommands";
+import { setBotOnline } from "./services/botStatus";
 
 async function main(): Promise<void> {
   const client = new Client({
@@ -33,6 +34,7 @@ async function main(): Promise<void> {
   await prisma.$connect();
   logger.info("bot", "Database connected");
 
+  await setBotOnline(false);
   await registerCommands();
 
   await client.login(config.DISCORD_TOKEN);

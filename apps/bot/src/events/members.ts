@@ -1,7 +1,8 @@
-import type { Guild, GuildMember } from "discord.js";
+import type { Guild, GuildMember, PartialGuildMember } from "discord.js";
 import { logger } from "../lib/logger";
 import { getGuildSettings } from "../lib/settings";
 import { sendGoodbye, sendWelcome } from "../services/welcome";
+import { sendMemberAutomation } from "../services/templateMessages";
 
 function parseAutoRoles(value: string | null | undefined): string[] {
   if (!value) return [];
@@ -33,6 +34,8 @@ export async function onGuildMemberAdd(member: GuildMember): Promise<void> {
   } catch (error) {
     logger.warn("members", `Could not send the welcome message: ${(error as Error).message}`);
   }
+
+  await sendMemberAutomation(guild, member, "JOIN");
 }
 
 export async function onGuildMemberRemove(member: GuildMember): Promise<void> {
@@ -40,5 +43,17 @@ export async function onGuildMemberRemove(member: GuildMember): Promise<void> {
     await sendGoodbye(member.guild, member);
   } catch (error) {
     logger.warn("members", `Could not send the goodbye message: ${(error as Error).message}`);
+  }
+
+  await sendMemberAutomation(member.guild, member, "LEAVE");
+}
+
+export async function onGuildMemberUpdate(
+  oldMember: GuildMember | PartialGuildMember,
+  newMember: GuildMember,
+): Promise<void> {
+  const addedRole = newMember.roles.cache.some((role) => !oldMember.roles.cache.has(role.id));
+  if (addedRole) {
+    await sendMemberAutomation(newMember.guild, newMember, "ROLE_ADDED");
   }
 }

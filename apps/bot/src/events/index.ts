@@ -9,15 +9,28 @@ import { logger } from "../lib/logger";
 import { registerGuildCommands } from "../lib/registerCommands";
 import { ensureGuild } from "../lib/settings";
 import { handleInteraction } from "./interactionCreate";
-import { onGuildMemberAdd, onGuildMemberRemove } from "./members";
+import { onGuildMemberAdd, onGuildMemberRemove, onGuildMemberUpdate } from "./members";
 import { onMessageCreate, onMessageUpdate, onReactionAdd } from "./messages";
 import { onPresenceUpdate } from "./presenceUpdate";
 import { onReady } from "./ready";
 import { announceChannelPost, onThreadCreate } from "./threads";
+import { setBotOnline } from "../services/botStatus";
 
 export function registerEvents(client: Client): void {
   client.once(Events.ClientReady, () => {
     void onReady(client);
+  });
+
+  client.on(Events.ShardDisconnect, () => {
+    void setBotOnline(false).catch((error) =>
+      logger.error("status", `Could not mark the bot offline: ${(error as Error).message}`, error),
+    );
+  });
+
+  client.on(Events.ShardResume, () => {
+    void setBotOnline(true).catch((error) =>
+      logger.error("status", `Could not mark the bot online: ${(error as Error).message}`, error),
+    );
   });
 
   client.on(Events.InteractionCreate, (interaction) => {
@@ -31,7 +44,15 @@ export function registerEvents(client: Client): void {
   });
 
   client.on(Events.GuildMemberRemove, (member) => {
-    void onGuildMemberRemove(member as GuildMember);
+    void onGuildMemberRemove(member as GuildMember).catch((error) =>
+      logger.error("members", `Could not process a member leaving: ${(error as Error).message}`, error),
+    );
+  });
+
+  client.on(Events.GuildMemberUpdate, (oldMember, newMember) => {
+    void onGuildMemberUpdate(oldMember, newMember).catch((error) =>
+      logger.error("members", `Could not process updated member roles: ${(error as Error).message}`, error),
+    );
   });
 
   client.on(Events.PresenceUpdate, (oldPresence, newPresence) => {
@@ -88,6 +109,9 @@ async function prismaGuildRemove(guildId: string): Promise<void> {
   await prisma.ticketTranscript.deleteMany({ where: { guildId } }).catch(() => undefined);
   await prisma.ticket.deleteMany({ where: { guildId } }).catch(() => undefined);
   await prisma.ticketPanel.deleteMany({ where: { guildId } }).catch(() => undefined);
+  await prisma.scheduledMessage.deleteMany({ where: { guildId } }).catch(() => undefined);
+  await prisma.messageAutomation.deleteMany({ where: { guildId } }).catch(() => undefined);
+  await prisma.stickyMessage.deleteMany({ where: { guildId } }).catch(() => undefined);
   await prisma.reactionRole.deleteMany({ where: { guildId } }).catch(() => undefined);
   await prisma.automodConfig.deleteMany({ where: { guildId } }).catch(() => undefined);
   await prisma.guildSettings.deleteMany({ where: { guildId } }).catch(() => undefined);

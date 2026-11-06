@@ -9,7 +9,7 @@ import {
 } from "@guardbot/shared";
 import { Prisma } from "@prisma/client";
 import { WEBSITE_NAME } from "@/lib/brand";
-import { requireBotOwner, requireGuildAdministrator, requireGuildManager } from "@/lib/auth";
+import { requireGuildAdministrator, requireGuildManager } from "@/lib/auth";
 import {
   addGuildMemberRole,
   createChannelMessage,
@@ -43,6 +43,33 @@ function bool(formData: FormData, key: string): boolean {
 function num(formData: FormData, key: string, fallback = 0): number {
   const value = Number(str(formData, key));
   return Number.isFinite(value) ? value : fallback;
+}
+
+function messageTemplatePayload(template: {
+  name: string;
+  content: string;
+  embedTitle: string | null;
+  embedDescription: string | null;
+}) {
+  const embeds = template.embedTitle || template.embedDescription
+    ? [{
+        color: 0x6366f1,
+        ...(template.embedTitle ? { title: template.embedTitle } : {}),
+        ...(template.embedDescription ? { description: template.embedDescription } : {}),
+        footer: { text: template.name },
+      }]
+    : undefined;
+
+  return {
+    ...(template.content ? { content: template.content } : {}),
+    ...(embeds ? { embeds } : {}),
+    allowedMentions: { parse: [] },
+  };
+}
+
+async function isTextChannelInGuild(guildId: string, channelId: string): Promise<boolean> {
+  const channels = await getGuildChannels(guildId);
+  return channels.some((channel) => channel.id === channelId && [0, 5].includes(channel.type));
 }
 
 /**
@@ -415,7 +442,6 @@ export async function denyRoleRequest(
 }
 
 export async function addLiveStreamAccount(guildId: string, formData: FormData): Promise<void> {
-  await requireBotOwner();
   await requireGuildManager(guildId);
   const platform = str(formData, "platform");
   const username = str(formData, "username").replace(/^@+/, "");
@@ -440,7 +466,6 @@ export async function addLiveStreamAccount(guildId: string, formData: FormData):
 }
 
 export async function removeLiveStreamAccount(guildId: string, accountId: string): Promise<void> {
-  await requireBotOwner();
   await requireGuildManager(guildId);
   const result = await prisma.liveStreamAccount.deleteMany({ where: { id: accountId, guildId } });
   if (result.count !== 1) {
@@ -555,22 +580,203 @@ export async function sendMessageTemplate(
     return { status: "error", message: "Choose a text or announcement channel in this server." };
   }
 
-  const embeds = template.embedTitle || template.embedDescription
-    ? [{
-        color: 0x6366f1,
-        ...(template.embedTitle ? { title: template.embedTitle } : {}),
-        ...(template.embedDescription ? { description: template.embedDescription } : {}),
-        footer: { text: template.name },
-      }]
-    : undefined;
-
-  await createChannelMessage(channelId, {
-    ...(template.content ? { content: template.content } : {}),
-    ...(embeds ? { embeds } : {}),
-    allowedMentions: { parse: [] },
-  });
+  await createChannelMessage(channelId, messageTemplatePayload(template));
 
   return { status: "success", message: `“${template.name}” sent to #${channel.name}.` };
+}
+
+export async function deleteMessageTemplate(
+  guildId: string,
+  templateId: string,
+): Promise<MessageTemplateActionState> {
+  await requireGuildManager(guildId);
+
+  const existing = await prisma.messageTemplate.findFirst({
+    where: { id: templateId, guildId },
+    select: { id: true, name: true },
+  });
+  if (!existing) {
+    return { status: "error", message: "This template was not found in this server." };
+  }
+
+  await prisma.messageTemplate.delete({ where: { id: existing.id } });
+  refresh(guildId, "messages");
+  return { status: "success", message: `Template "${existing.name}" deleted.` };
+}
+
+export async function duplicateMessageTemplate(
+  guildId: string,
+  templateId: string,
+): Promise<MessageTemplateActionState> {
+  await requireGuildManager(guildId);
+
+  const existing = await prisma.messageTemplate.findFirst({
+    where: { id: templateId, guildId },
+  });
+  if (!existing) {
+    return { status: "error", message: "This template was not found in this server." };
+  }
+
+  const templateCount = await prisma.messageTemplate.count({ where: { guildId } });
+  if (templateCount >= 100) {
+    return { status: "error", message: "This server has reached the 100-template limit." };
+  }
+
+  const saved = await prisma.messageTemplate.create({
+    data: {
+      guildId,
+      name: `${existing.name.slice(0, 73)} (copy)`,
+      content: existing.content,
+      embedTitle: existing.embedTitle,
+      embedDescription: existing.embedDescription,
+    },
+    select: { id: true },
+  });
+  refresh(guildId, "messages");
+  return { status: "success", message: "Template duplicated.", templateId: saved.id };
+}
+
+export async function scheduleMessageTemplate(
+  guildId: string,
+  templateId: string,
+  _previousState: MessageTemplateActionState,
+  formData: FormData,
+): Promise<MessageTemplateActionState> {
+  await requireGuildManager(guildId);
+  const template = await prisma.messageTemplate.findFirst({ where: { id: templateId, guildId } });
+  if (!template) {
+    return { status: "error", message: "Save this template before scheduling it." };
+  }
+
+  const channelId = str(formData, "channelId");
+  if (!channelId || !(await isTextChannelInGuild(guildId, channelId))) {
+    return { status: "error", message: "Choose a text or announcement channel in this server." };
+  }
+
+  const scheduledAt = new Date(str(formData, "scheduledAt"));
+  if (!Number.isFinite(scheduledAt.getTime()) || scheduledAt <= new Date()) {
+    return { status: "error", message: "Choose a valid time in the future." };
+  }
+
+  await prisma.scheduledMessage.create({
+    data: {
+      guildId,
+      channelId,
+      templateName: template.name,
+      content: template.content,
+      embedTitle: template.embedTitle,
+      embedDescription: template.embedDescription,
+      scheduledAt,
+    },
+  });
+  refresh(guildId, "messages");
+  return { status: "success", message: "Message scheduled." };
+}
+
+export async function saveMessageAutomation(
+  guildId: string,
+  templateId: string,
+  _previousState: MessageTemplateActionState,
+  formData: FormData,
+): Promise<MessageTemplateActionState> {
+  await requireGuildManager(guildId);
+  const template = await prisma.messageTemplate.findFirst({ where: { id: templateId, guildId } });
+  if (!template) {
+    return { status: "error", message: "Save this template before creating an automation." };
+  }
+
+  const trigger = str(formData, "trigger");
+  if (!["JOIN", "LEAVE", "ROLE_ADDED"].includes(trigger)) {
+    return { status: "error", message: "Choose a supported automation trigger." };
+  }
+
+  const channelId = nullable(str(formData, "channelId"));
+  if (channelId && !(await isTextChannelInGuild(guildId, channelId))) {
+    return { status: "error", message: "Choose a text or announcement channel in this server, or select DM." };
+  }
+
+  await prisma.messageAutomation.upsert({
+    where: { guildId_templateId_trigger: { guildId, templateId, trigger } },
+    create: {
+      guildId,
+      templateId,
+      templateName: template.name,
+      trigger,
+      channelId,
+      content: template.content,
+      embedTitle: template.embedTitle,
+      embedDescription: template.embedDescription,
+    },
+    update: {
+      channelId,
+      templateName: template.name,
+      content: template.content,
+      embedTitle: template.embedTitle,
+      embedDescription: template.embedDescription,
+      enabled: true,
+    },
+  });
+  refresh(guildId, "messages");
+  return { status: "success", message: "Automation saved." };
+}
+
+export async function setStickyMessage(
+  guildId: string,
+  templateId: string,
+  _previousState: MessageTemplateActionState,
+  formData: FormData,
+): Promise<MessageTemplateActionState> {
+  await requireGuildManager(guildId);
+  const template = await prisma.messageTemplate.findFirst({ where: { id: templateId, guildId } });
+  if (!template) {
+    return { status: "error", message: "Save this template before setting it as sticky." };
+  }
+
+  const channelId = str(formData, "channelId");
+  if (!channelId || !(await isTextChannelInGuild(guildId, channelId))) {
+    return { status: "error", message: "Choose a text or announcement channel in this server." };
+  }
+
+  const existing = await prisma.stickyMessage.findUnique({ where: { channelId } });
+  if (existing && existing.guildId !== guildId) {
+    return { status: "error", message: "This channel does not belong to this server." };
+  }
+
+  const payload = messageTemplatePayload(template);
+  let sentMessage: { id: string };
+  if (existing?.messageId) {
+    try {
+      sentMessage = await editChannelMessage(channelId, existing.messageId, payload);
+    } catch (error) {
+      if (!(error instanceof DiscordApiError) || error.status !== 404) throw error;
+      sentMessage = await createChannelMessage(channelId, payload);
+    }
+  } else {
+    sentMessage = await createChannelMessage(channelId, payload);
+  }
+  await prisma.stickyMessage.upsert({
+    where: { channelId },
+    create: {
+      guildId,
+      channelId,
+      templateName: template.name,
+      content: template.content,
+      embedTitle: template.embedTitle,
+      embedDescription: template.embedDescription,
+      messageId: sentMessage.id,
+      autoUpdate: bool(formData, "autoUpdate"),
+    },
+    update: {
+      content: template.content,
+      templateName: template.name,
+      embedTitle: template.embedTitle,
+      embedDescription: template.embedDescription,
+      messageId: sentMessage.id,
+      autoUpdate: bool(formData, "autoUpdate"),
+    },
+  });
+  refresh(guildId, "messages");
+  return { status: "success", message: "Sticky message set." };
 }
 
 // ---------------------------------------------------------------------------
@@ -704,7 +910,6 @@ export async function removeReactionRole(guildId: string, roleId: string): Promi
 // ---------------------------------------------------------------------------
 
 export async function saveNotifications(guildId: string, formData: FormData): Promise<void> {
-  await requireBotOwner();
   await requireGuildManager(guildId);
 
   const data = {

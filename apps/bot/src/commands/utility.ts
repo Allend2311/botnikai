@@ -132,7 +132,7 @@ export const userInfoCommand: Command = {
 
       embed.addFields(
         { name: "Nickname", value: member.nickname ?? "None", inline: true },
-        { name: "Joined", value: `<t:${Math.floor(member.joinedTimestamp ?? 0) / 1000 || 0}:R>`, inline: true },
+        { name: "Joined", value: `<t:${Math.floor((member.joinedTimestamp ?? 0) / 1000) || 0}:R>`, inline: true },
         {
           name: "Timed out until",
           value: member.communicationDisabledUntilTimestamp

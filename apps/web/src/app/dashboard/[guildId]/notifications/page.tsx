@@ -17,8 +17,6 @@ import { ChannelSelect, RoleSelect } from "@/components/selects";
 import { SubmitButton } from "@/components/submit-button";
 import { PageHeader, StatusPill } from "@/components/page-header";
 import { prisma } from "@/lib/prisma";
-import { getSession } from "@/lib/session";
-import { isBotOwner } from "@/lib/owners";
 
 export const dynamic = "force-dynamic";
 
@@ -49,48 +47,6 @@ export default async function NotificationsPage({
   const { guildId } = await params;
   const context = await getGuildContext(guildId);
   if (!context) notFound();
-
-  const session = await getSession();
-  const isOwner = await isBotOwner(session?.user.discordId);
-
-  if (!isOwner) {
-    return (
-      <div className="space-y-6">
-        <PageHeader
-          eyebrow="Broadcast"
-          title="Notifications"
-          description="Notify your community when Discord reports a member streaming on Kick or TikTok."
-          action={<StatusPill label="Coming soon" tone="cyan" />}
-        />
-
-        <Card>
-          <div className="flex flex-col items-center justify-center gap-5 py-14 text-center sm:py-20">
-            <span className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/[0.08] bg-gradient-to-br from-brand-500/20 to-cyan-500/10 text-brand-200 shadow-[0_0_30px_-12px_rgba(129,140,248,0.9)]">
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="h-6 w-6"
-                aria-hidden="true"
-              >
-                <path d="M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16Zm0 4v4l3 2" />
-              </svg>
-            </span>
-            <div className="max-w-md">
-              <h2 className="text-lg font-semibold text-white">Coming soon</h2>
-              <p className="mt-2 text-sm leading-relaxed text-slate-400">
-                Live stream and new post notifications are still in development. They will be
-                available for your server soon.
-              </p>
-            </div>
-          </div>
-        </Card>
-      </div>
-    );
-  }
 
   const { settings, channels, roles } = context;
   const liveStreamAccounts = await prisma.liveStreamAccount.findMany({

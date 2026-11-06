@@ -731,7 +731,7 @@ export const softbanCommand: Command = {
 
     const caseNumber = await recordCase({
       guild,
-      type: "BAN",
+      type: "SOFTBAN",
       targetId: user.id,
       targetTag: user.tag,
       moderatorId: interaction.user.id,

@@ -103,12 +103,10 @@ function NavigationLabel({
 export function DashboardNav({
   guildId,
   onNavigate,
-  canUseNotifications = true,
   className = "",
 }: {
   guildId: string;
   onNavigate?: () => void;
-  canUseNotifications?: boolean;
   className?: string;
 }) {
   const pathname = usePathname();
@@ -119,9 +117,6 @@ export function DashboardNav({
       {ITEMS.map((item) => {
         const href = item.key ? `${base}/${item.key}` : base;
         const active = item.key ? pathname.startsWith(href) : pathname === href;
-        const badge =
-          item.key === "notifications" && !canUseNotifications ? "Soon" : undefined;
-
         return (
           <Link
             key={item.key || "overview"}
@@ -140,7 +135,7 @@ export function DashboardNav({
                 aria-hidden="true"
               />
             )}
-            <NavigationLabel active={active} icon={item.icon} label={item.label} badge={badge} />
+            <NavigationLabel active={active} icon={item.icon} label={item.label} />
           </Link>
         );
       })}

@@ -254,6 +254,65 @@ model MessageTemplate {
   @@index([guildId, updatedAt])
 }
 
+model ScheduledMessage {
+  id               String   @id @default(cuid())
+  guildId          String
+  channelId        String
+  templateName     String
+  content          String   @default("") @db.Text
+  embedTitle       String?
+  embedDescription String?  @db.Text
+  scheduledAt      DateTime
+  status           String   @default("PENDING")
+  error            String?  @db.Text
+  sentAt           DateTime?
+  createdAt        DateTime @default(now())
+
+  @@index([status, scheduledAt])
+  @@index([guildId, scheduledAt])
+}
+
+model MessageAutomation {
+  id               String   @id @default(cuid())
+  guildId          String
+  templateId       String
+  templateName     String
+  trigger          String
+  channelId        String?
+  content          String   @default("") @db.Text
+  embedTitle       String?
+  embedDescription String?  @db.Text
+  enabled          Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([guildId, templateId, trigger])
+  @@index([guildId, enabled])
+}
+
+model StickyMessage {
+  id               String   @id @default(cuid())
+  guildId          String
+  channelId        String   @unique
+  templateName     String
+  content          String   @default("") @db.Text
+  embedTitle       String?
+  embedDescription String?  @db.Text
+  messageId        String?
+  autoUpdate       Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([guildId])
+}
+
+model BotStatus {
+  id              String   @id
+  online          Boolean  @default(false)
+  lastHeartbeatAt DateTime?
+  updatedAt       DateTime @updatedAt
+}
+
 // ---------------------------------------------------------------------------
 // Tickets
 // ---------------------------------------------------------------------------

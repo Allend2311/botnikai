@@ -2,7 +2,6 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 import { getSession, getSessionUser, SessionExpiredError, withAccessToken } from "./session";
 import { canManageGuild, getUserGuilds, isGuildAdministrator } from "./discord";
-import { isBotOwner } from "./owners";
 
 /**
  * Returns the signed in user or redirects to the landing page.
@@ -75,21 +74,4 @@ export async function requireGuildAdministrator(guildId: string) {
   }
 
   return { user: session.user, guild };
-}
-
-/**
- * Makes sure the signed in user is the bot owner. Used by features that are
- * still limited to the developer, such as the Notifications page.
- */
-export async function requireBotOwner() {
-  const session = await getSession();
-  if (!session) {
-    throw new Error("You need to sign in with Discord first.");
-  }
-
-  if (!(await isBotOwner(session.user.discordId))) {
-    throw new Error("Notifications are coming soon and are not available yet.");
-  }
-
-  return session.user;
 }

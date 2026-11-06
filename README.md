@@ -16,11 +16,12 @@ The database is **Prisma Postgres** — the bot and the dashboard share it.
 | **Auto-moderation** | Blocks Discord invites, external links (with domain allow-list), spam, excessive caps and banned words. Per-rule actions, per-channel/role ignores. |
 | **Welcome & roles** | Custom welcome and farewell messages with template tokens, uploaded image/GIF embeds and DMs, automatic auto-roles and emoji reaction roles. |
 | **Tickets** | Support panels posted by the bot, private ticket channels, support roles, transcripts and a ticket history. |
+| **Message templates** | Reusable messages with scheduled delivery, join/leave/role-added automations and sticky channel posts. |
 | **Role requests** | Any server member can post an in-game name and nominate a voucher. Requests and review cards stay in the submitting server channel; the bot does not DM applicants or vouchers. |
 | **Announcements** | Administrators can post styled announcements with an optional image or GIF and optional `@everyone` / `@here` pings using `/announcement send`. |
 | **Kick & TikTok live pings** | Uses Discord presence updates to announce matching Kick/TikTok streaming activities and ping a configured role; no platform API is used. |
 | **New post notifications** | Reposts new Discord forum/channel posts into an announcement channel. External-platform videos are not monitored. |
-| **Dashboard** | Discord OAuth2 login, server picker, and pages for every setting — no need to touch Discord commands. |
+| **Dashboard** | Discord OAuth2 login, server picker, pages for every setting, and a live bot online/offline indicator. |
 
 ---
 
@@ -112,9 +113,10 @@ The database is **Prisma Postgres** — the bot and the dashboard share it.
 1. Create a project at [Prisma Postgres](https://www.prisma.io/postgres).
 2. Copy the PostgreSQL connection string from the project's connection details
    into `DATABASE_URL` in `.env`.
-3. Set `DIRECT_URL` to the direct connection string if your project provides one
-   for migrations. If it does not, this project can use the same pooled URL for
-   both values.
+3. Keep the pooled connection string in `DATABASE_URL` for application traffic.
+   Set `DIRECT_URL` to the provider's direct (non-pooled) PostgreSQL connection
+   string for migrations. Prisma migrations use PostgreSQL advisory locks, which
+   can time out when run through a pooled connection.
 
 ---
 
@@ -134,7 +136,7 @@ DISCORD_CLIENT_SECRET=...
 DISCORD_APPLICATION_ID=...
 
 DATABASE_URL="postgres://USER:PASSWORD@pooled.db.prisma.io:5432/postgres?sslmode=require"
-DIRECT_URL="${DATABASE_URL}"       # use a direct URL here if your project provides one
+DIRECT_URL="your-direct-postgres-connection-string"
 
 APP_URL=http://localhost:3000
 ```
@@ -144,6 +146,10 @@ Keep connection strings private. Verify the connection with `npm run db:check`.
 ---
 
 ## 4. Apply the migrations and register the commands
+
+Run only one migration command at a time. If `db:deploy` reports that it timed out
+acquiring the PostgreSQL advisory lock, wait for any active migration to finish and
+confirm `DIRECT_URL` points to the direct, non-pooled connection before retrying.
 
 ```bash
 npm run db:generate   # generate the Prisma client
@@ -239,8 +245,10 @@ Bot and database scripts:
 
 ## Slash commands
 
-**Moderation** — `/ban` `/unban` `/kick` `/mute` `/unmute` `/warn` `/warnings` `/removewarn`
+**Moderation** — `/ban` `/unban` `/kick` `/softban` `/mute` `/unmute` `/warn` `/warnings` `/removewarn`
 `/purge` `/lock` `/unlock` `/slowmode` `/modlogs` `/userinfo`
+
+**Configuration** — `/settings` `/logs` `/automod`
 
 **Setup** — `/welcome` `/goodbye` `/autorole` `/reactionrole` `/ticketpanel`
 `/ticket` (create · close · rename · list) `/liveconfig` `/livecheck` `/postconfig` `/posttest`
@@ -261,7 +269,9 @@ Configure dashboard settings or use the matching slash commands where available.
 Use `/liveconfig everyone` and `/liveconfig here`, or `/postconfig everyone` and
 `/postconfig here`, to enable or disable broadcast mentions in automatic announcements.
 `/announcement send` also has optional `ping-everyone` and `ping-here` options.
-The dashboard's **Messages** page is a coming-soon overview of the planned message tools.
+The dashboard's **Messages** page includes reusable templates, scheduled sends,
+member-event automations and sticky posts. Scheduled messages are sent while the
+bot is online; the dashboard shows the bot's last reported online status.
 The nominated voucher must confirm each role request before an Administrator can
 review it. The bot posts a review card in the channel where the request was
 submitted, and does not DM the applicant or voucher. An Administrator can approve

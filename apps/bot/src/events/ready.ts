@@ -2,10 +2,14 @@ import { ActivityType, type Client } from "discord.js";
 import { logger } from "../lib/logger";
 import { registerGuildCommands } from "../lib/registerCommands";
 import { ensureGuild } from "../lib/settings";
+import { startBotHeartbeat } from "../services/botStatus";
+import { startScheduledMessageWorker } from "../services/templateMessages";
 
 export async function onReady(client: Client): Promise<void> {
   logger.info("bot", `Logged in as ${client.user?.tag ?? "unknown"}`);
 
+  startBotHeartbeat(client);
+  startScheduledMessageWorker(client);
   client.user?.setActivity("with /help", { type: ActivityType.Watching });
   client.user?.setStatus("online");
 

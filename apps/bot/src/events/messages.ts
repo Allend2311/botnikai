@@ -11,6 +11,7 @@ import { prisma } from "../lib/db";
 import { checkMessage } from "../services/automod";
 import { addWarning, recordCase } from "../services/moderation";
 import { getCachedConfig } from "../lib/settings";
+import { updateStickyMessage } from "../services/templateMessages";
 
 async function handleViolation(message: Message, violation: NonNullable<Awaited<ReturnType<typeof checkMessage>>>): Promise<void> {
   const guild = message.guild;
@@ -81,9 +82,17 @@ export async function onMessageCreate(message: Message): Promise<void> {
     const violation = await checkMessage(message);
     if (violation) {
       await handleViolation(message, violation);
+      return;
     }
   } catch (error) {
     logger.error("automod", `Could not check the message: ${(error as Error).message}`);
+    return;
+  }
+
+  try {
+    await updateStickyMessage(message);
+  } catch (error) {
+    logger.error("templates", `Could not update a sticky message: ${(error as Error).message}`, error);
   }
 }
 

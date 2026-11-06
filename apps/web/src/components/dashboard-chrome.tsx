@@ -7,6 +7,7 @@ import { Logo } from "@/components/logo";
 import { LogoutButton } from "@/components/logout-button";
 import { DashboardNav } from "@/components/dashboard-nav";
 import { WEBSITE_NAME } from "@/lib/brand";
+import { BotStatusIndicator } from "@/components/bot-status-indicator";
 
 export function DashboardChrome({
   guildId,
@@ -14,7 +15,7 @@ export function DashboardChrome({
   guildIcon,
   memberCount,
   canManage,
-  canUseNotifications,
+  botOnline,
   displayName,
   avatar,
   initials,
@@ -26,7 +27,7 @@ export function DashboardChrome({
   guildIcon: string | null;
   memberCount: number;
   canManage: boolean;
-  canUseNotifications: boolean;
+  botOnline: boolean;
   displayName: string;
   avatar: string | null;
   initials: string;
@@ -79,7 +80,7 @@ export function DashboardChrome({
     <div className="min-h-screen">
       <header className="sticky top-0 z-40">
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-400/40 to-transparent" />
-        <div className="border-b border-white/[0.06] bg-[#05050d]/80 backdrop-blur-2xl">
+        <div className="border-b border-white/[0.07] bg-[#070a13]/80 shadow-[0_12px_42px_-30px_rgba(34,211,238,0.28)] backdrop-blur-2xl">
           <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
             <div className="flex min-w-0 items-center gap-3 sm:gap-4">
               <Logo className="shrink-0" showTagline={false} />
@@ -107,6 +108,7 @@ export function DashboardChrome({
             </div>
 
             <div className="flex items-center gap-2 sm:gap-3">
+              <BotStatusIndicator initialOnline={botOnline} />
               <div className="hidden items-center gap-2.5 rounded-full border border-white/[0.07] bg-white/[0.025] py-1 pl-1 pr-3 sm:flex">
                 {userAvatar}
                 <span className="max-w-[10rem] truncate text-xs font-medium text-slate-300">
@@ -138,11 +140,11 @@ export function DashboardChrome({
               <span className="h-1 w-1 rounded-full bg-cyan-400/80" />
               Workspace
             </p>
-            <div className="rounded-2xl border border-white/[0.07] bg-white/[0.018] p-2">
-              <DashboardNav guildId={guildId} canUseNotifications={canUseNotifications} />
+            <div className="rounded-2xl border border-white/[0.08] bg-[#090c16]/75 p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
+              <DashboardNav guildId={guildId} />
             </div>
 
-            <div className="gradient-border mt-4 rounded-2xl bg-white/[0.025] p-4">
+            <div className="gradient-border mt-4 rounded-2xl bg-gradient-to-br from-cyan-400/[0.055] via-[#0b0d19] to-brand-500/[0.06] p-4">
               <div className="flex items-center gap-2">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.75)]" />
                 <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-500">
@@ -223,7 +225,6 @@ export function DashboardChrome({
             </p>
             <DashboardNav
               guildId={guildId}
-              canUseNotifications={canUseNotifications}
               onNavigate={() => setOpen(false)}
             />
 

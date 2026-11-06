@@ -1,11 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useActionState } from "react";
 import {
+  deleteMessageTemplate,
+  duplicateMessageTemplate,
+  saveMessageAutomation,
   saveMessageTemplate,
+  scheduleMessageTemplate,
   sendMessageTemplate,
+  setStickyMessage,
   type MessageTemplateActionState,
 } from "@/app/actions";
 import { Badge, Input, Textarea } from "@/components/ui";
@@ -145,16 +150,18 @@ export function MessageTemplates({
                     Updated {new Date(template.updatedAt).toLocaleDateString()}
                   </span>
                 </button>
-                <div className="mt-4 flex items-center justify-between border-t border-white/[0.06] pt-3">
-                  <Badge tone="blue">Template</Badge>
-                  <button
-                    type="button"
-                    disabled={!canManage}
-                    onClick={() => openEditor(template, "use")}
-                    className="text-xs font-semibold text-brand-200 transition hover:text-white disabled:opacity-50"
-                  >
-                    Use template →
-                  </button>
+                <div className="mt-4 border-t border-white/[0.06] pt-3">
+                  <div className="flex items-center justify-between">
+                    <Badge tone="blue">Template</Badge>
+                    <div className="flex items-center gap-3">
+                      <TemplateCardActions
+                        guildId={guildId}
+                        template={template}
+                        canManage={canManage}
+                        onUse={() => openEditor(template, "use")}
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
             </li>
@@ -178,6 +185,81 @@ export function MessageTemplates({
   );
 }
 
+
+function TemplateCardActions({
+  guildId,
+  template,
+  canManage,
+  onUse,
+}: {
+  guildId: string;
+  template: MessageTemplate;
+  canManage: boolean;
+  onUse: () => void;
+}) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
+
+  function handleDuplicate() {
+    startTransition(async () => {
+      const result = await duplicateMessageTemplate(guildId, template.id);
+      if (result.status === "error") {
+        setActionMessage(result.message);
+      } else {
+        router.refresh();
+      }
+    });
+  }
+
+  function handleDelete() {
+    if (!confirm(`Delete "${template.name}"? This cannot be undone.`)) return;
+    startTransition(async () => {
+      const result = await deleteMessageTemplate(guildId, template.id);
+      if (result.status === "error") {
+        setActionMessage(result.message);
+      } else {
+        router.refresh();
+      }
+    });
+  }
+
+  return (
+    <>
+      {actionMessage && (
+        <span className="text-xs text-rose-300">{actionMessage}</span>
+      )}
+      <button
+        type="button"
+        disabled={!canManage || isPending}
+        onClick={onUse}
+        className="text-xs font-semibold text-brand-200 transition hover:text-white disabled:opacity-50"
+      >
+        Use →
+      </button>
+      <button
+        type="button"
+        disabled={!canManage || isPending}
+        onClick={handleDuplicate}
+        aria-label={`Duplicate ${template.name}`}
+        title="Duplicate template"
+        className="text-xs text-slate-400 transition hover:text-white disabled:opacity-50"
+      >
+        ⧉
+      </button>
+      <button
+        type="button"
+        disabled={!canManage || isPending}
+        onClick={handleDelete}
+        aria-label={`Delete ${template.name}`}
+        title="Delete template"
+        className="text-xs text-rose-400 transition hover:text-rose-200 disabled:opacity-50"
+      >
+        ✕
+      </button>
+    </>
+  );
+}
 function TemplateEditor({
   guildId,
   guildName,
@@ -208,6 +290,26 @@ function TemplateEditor({
   );
   const [sendState, sendFormAction] = useActionState(
     sendMessageTemplate.bind(null, guildId, template?.id ?? ""),
+    EMPTY_ACTION_STATE,
+  );
+  const [scheduleState, scheduleFormAction] = useActionState(
+    async (previousState: MessageTemplateActionState, formData: FormData) => {
+      const localDateTime = `${String(formData.get("date") ?? "")}T${String(formData.get("time") ?? "")}`;
+      const scheduledAt = new Date(localDateTime);
+      if (!Number.isFinite(scheduledAt.getTime())) {
+        return { status: "error", message: "Choose a valid date and time." } satisfies MessageTemplateActionState;
+      }
+      formData.set("scheduledAt", scheduledAt.toISOString());
+      return scheduleMessageTemplate(guildId, template?.id ?? "", previousState, formData);
+    },
+    EMPTY_ACTION_STATE,
+  );
+  const [automationState, automationFormAction] = useActionState(
+    saveMessageAutomation.bind(null, guildId, template?.id ?? ""),
+    EMPTY_ACTION_STATE,
+  );
+  const [stickyState, stickyFormAction] = useActionState(
+    setStickyMessage.bind(null, guildId, template?.id ?? ""),
     EMPTY_ACTION_STATE,
   );
 
@@ -469,10 +571,11 @@ function TemplateEditor({
               ) : useAction === "schedule" ? (
                 <div className="mx-auto max-w-xl space-y-5 py-5">
                   <p className="text-center text-sm text-slate-300">Schedule this template to be sent later</p>
-                  <form className="space-y-5">
+                  <form action={scheduleFormAction} className="space-y-5">
                     <label className="block space-y-2">
                       <span className="text-sm font-semibold text-slate-200">Channel</span>
                       <select
+                        name="channelId"
                         required
                         defaultValue=""
                         className="w-full rounded-xl border border-white/10 bg-ink-950 px-3.5 py-2.5 text-sm text-slate-100 outline-none focus:border-brand-400"
@@ -487,6 +590,7 @@ function TemplateEditor({
                       <label className="block space-y-2">
                         <span className="text-sm font-semibold text-slate-200">Date</span>
                         <input
+                          name="date"
                           type="date"
                           required
                           className="w-full rounded-xl border border-white/10 bg-ink-950 px-3.5 py-2.5 text-sm text-slate-100 outline-none focus:border-brand-400"
@@ -495,6 +599,7 @@ function TemplateEditor({
                       <label className="block space-y-2">
                         <span className="text-sm font-semibold text-slate-200">Time</span>
                         <input
+                          name="time"
                           type="time"
                           required
                           className="w-full rounded-xl border border-white/10 bg-ink-950 px-3.5 py-2.5 text-sm text-slate-100 outline-none focus:border-brand-400"
@@ -505,76 +610,60 @@ function TemplateEditor({
                       <input type="checkbox" defaultChecked disabled className="h-4 w-4 accent-brand-500" />
                       Mentions are disabled for safety
                     </label>
+                    <ActionNotice state={scheduleState} />
                     <div className="flex justify-end">
-                      <button
-                        type="button"
-                        disabled={!canManage || !template}
-                        className="inline-flex items-center justify-center rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-500 disabled:opacity-50"
-                      >
-                        Schedule message
-                      </button>
+                      <SubmitButton disabled={!canManage || !template}>Schedule message</SubmitButton>
                     </div>
                   </form>
                 </div>
               ) : useAction === "automate" ? (
                 <div className="mx-auto max-w-xl space-y-5 py-5">
                   <p className="text-center text-sm text-slate-300">Set up automatic sending for this template</p>
-                  <div className="space-y-4 rounded-xl border border-white/[0.07] bg-ink-950/40 p-5">
+                  <form action={automationFormAction} className="space-y-4 rounded-xl border border-white/[0.07] bg-ink-950/40 p-5">
                     <label className="block space-y-2">
                       <span className="text-sm font-semibold text-slate-200">Trigger</span>
-                      <select className="w-full rounded-xl border border-white/10 bg-ink-950 px-3.5 py-2.5 text-sm text-slate-100 outline-none focus:border-brand-400">
-                        <option value="join">On member join</option>
-                        <option value="leave">On member leave</option>
-                        <option value="levelup">On level up</option>
-                        <option value="role">On role added</option>
+                      <select name="trigger" required className="w-full rounded-xl border border-white/10 bg-ink-950 px-3.5 py-2.5 text-sm text-slate-100 outline-none focus:border-brand-400">
+                        <option value="JOIN">On member join</option>
+                        <option value="LEAVE">On member leave</option>
+                        <option value="ROLE_ADDED">When a role is added</option>
                       </select>
                     </label>
                     <label className="block space-y-2">
                       <span className="text-sm font-semibold text-slate-200">Channel</span>
-                      <select className="w-full rounded-xl border border-white/10 bg-ink-950 px-3.5 py-2.5 text-sm text-slate-100 outline-none focus:border-brand-400">
+                      <select name="channelId" className="w-full rounded-xl border border-white/10 bg-ink-950 px-3.5 py-2.5 text-sm text-slate-100 outline-none focus:border-brand-400">
                         <option value="">DM user</option>
                         {channels.map((channel) => (
                           <option key={channel.value} value={channel.value}>{channel.label}</option>
                         ))}
                       </select>
                     </label>
+                    <ActionNotice state={automationState} />
                     <div className="flex justify-end pt-2">
-                      <button
-                        type="button"
-                        disabled={!canManage || !template}
-                        className="inline-flex items-center justify-center rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-500 disabled:opacity-50"
-                      >
-                        Save automation
-                      </button>
+                      <SubmitButton disabled={!canManage || !template}>Save automation</SubmitButton>
                     </div>
-                  </div>
+                  </form>
                 </div>
               ) : useAction === "sticky" ? (
                 <div className="mx-auto max-w-xl space-y-5 py-5">
                   <p className="text-center text-sm text-slate-300">Make this message stick to the bottom of a channel</p>
-                  <div className="space-y-4 rounded-xl border border-white/[0.07] bg-ink-950/40 p-5">
+                  <form action={stickyFormAction} className="space-y-4 rounded-xl border border-white/[0.07] bg-ink-950/40 p-5">
                     <label className="block space-y-2">
                       <span className="text-sm font-semibold text-slate-200">Channel</span>
-                      <select className="w-full rounded-xl border border-white/10 bg-ink-950 px-3.5 py-2.5 text-sm text-slate-100 outline-none focus:border-brand-400">
+                      <select name="channelId" required className="w-full rounded-xl border border-white/10 bg-ink-950 px-3.5 py-2.5 text-sm text-slate-100 outline-none focus:border-brand-400">
                         {channels.map((channel) => (
                           <option key={channel.value} value={channel.value}>{channel.label}</option>
                         ))}
                       </select>
                     </label>
                     <label className="flex items-center gap-3 text-sm text-slate-300">
-                      <input type="checkbox" defaultChecked className="h-4 w-4 accent-brand-500" />
+                      <input type="checkbox" name="autoUpdate" defaultChecked className="h-4 w-4 accent-brand-500" />
                       Auto-update on new messages
                     </label>
+                    <ActionNotice state={stickyState} />
                     <div className="flex justify-end pt-2">
-                      <button
-                        type="button"
-                        disabled={!canManage || !template}
-                        className="inline-flex items-center justify-center rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-500 disabled:opacity-50"
-                      >
-                        Set as sticky
-                      </button>
+                      <SubmitButton disabled={!canManage || !template}>Set as sticky</SubmitButton>
                     </div>
-                  </div>
+                  </form>
                 </div>
               ) : null}
             </div>
@@ -582,5 +671,17 @@ function TemplateEditor({
         </div>
       </section>
     </div>
+  );
+}
+
+function ActionNotice({ state }: { state: MessageTemplateActionState }) {
+  if (!state.message) return null;
+  return (
+    <p
+      role="status"
+      className={`text-sm ${state.status === "error" ? "text-rose-300" : "text-emerald-300"}`}
+    >
+      {state.message}
+    </p>
   );
 }

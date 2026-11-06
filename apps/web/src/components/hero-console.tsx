@@ -29,7 +29,7 @@ const ACTIVITY = [
 
 export function HeroConsole() {
   return (
-    <div className="reveal-up relative mx-auto mt-14 w-full max-w-6xl [animation-delay:180ms] sm:mt-20">
+    <div className="hero-console reveal-up relative mx-auto mt-2 w-full max-w-6xl [animation-delay:180ms] lg:mt-0">
       <div
         className="absolute -inset-x-6 bottom-0 top-10 -z-10 rounded-[3rem] bg-gradient-to-r from-cyan-500/20 via-brand-500/20 to-violet-500/20 blur-3xl"
         aria-hidden="true"

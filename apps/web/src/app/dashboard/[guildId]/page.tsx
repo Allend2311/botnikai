@@ -214,7 +214,7 @@ export default async function GuildOverviewPage({
             <ul className="divide-y divide-white/5">
               {recentCases.map((entry) => (
                 <li key={entry.id} className="flex items-center gap-4 py-3 first:pt-0 last:pb-0">
-                  <Badge tone={entry.type === "BAN" || entry.type === "KICK" ? "red" : "amber"}>
+                  <Badge tone={entry.type === "BAN" || entry.type === "SOFTBAN" || entry.type === "KICK" ? "red" : "amber"}>
                     {isCaseType(entry.type) ? CASE_LABELS[entry.type] : entry.type}
                   </Badge>
                   <span className="min-w-0 flex-1 truncate text-sm text-slate-300">

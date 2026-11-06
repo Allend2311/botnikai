@@ -3,8 +3,9 @@ import { getGuildContext } from "@/lib/guild";
 import { guildIconUrl, inviteUrl } from "@/lib/discord";
 import { getSession } from "@/lib/session";
 import { avatarUrl } from "@/lib/discord";
-import { isBotOwner } from "@/lib/owners";
 import { DashboardChrome } from "@/components/dashboard-chrome";
+import { prisma } from "@/lib/prisma";
+import { isBotOnline } from "@/lib/bot-status";
 
 export const dynamic = "force-dynamic";
 
@@ -23,8 +24,7 @@ export default async function GuildLayout({
   const icon = guildIconUrl(context.guild.id, context.guild.icon);
   const avatar = avatarUrl(session.user.discordId, session.user.avatar);
   const displayName = session.user.globalName ?? session.user.username;
-  const canUseNotifications = await isBotOwner(session.user.discordId);
-
+  const botStatus = await prisma.botStatus.findUnique({ where: { id: "primary" } });
   return (
     <DashboardChrome
       guildId={guildId}
@@ -32,7 +32,7 @@ export default async function GuildLayout({
       guildIcon={icon}
       memberCount={context.guild.approximate_member_count ?? 0}
       canManage={context.canManage}
-      canUseNotifications={canUseNotifications}
+      botOnline={isBotOnline(botStatus)}
       displayName={displayName}
       avatar={avatar}
       initials={session.user.username.slice(0, 2).toUpperCase()}
