@@ -84,6 +84,7 @@ export interface GuildContext {
   roles: DiscordRole[];
   canManage: boolean;
   canAdmin: boolean;
+  isOwner: boolean;
   isMember: boolean;
 }
 
@@ -123,6 +124,7 @@ export const getGuildContext = cache(
       roles,
       canManage: userGuild ? userGuild.owner || canManageGuild(userGuild.permissions) : false,
       canAdmin: userGuild ? isGuildAdministrator(userGuild.permissions) : false,
+      isOwner: userGuild?.owner ?? false,
       isMember: Boolean(userGuild),
     };
   },

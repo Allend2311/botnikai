@@ -1,5 +1,5 @@
 import { DiscordApiError, getBotUser, getGuildMember, setCurrentBotNickname } from "@/lib/discord";
-import { requireGuildManager } from "@/lib/auth";
+import { requireGuildOwner } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -11,11 +11,11 @@ function jsonError(message: string, status: number): Response {
 
 async function authorize(guildId: string): Promise<Response | null> {
   try {
-    await requireGuildManager(guildId);
+    await requireGuildOwner(guildId);
     return null;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not verify your server permissions.";
-    const status = /Manage Server|not a member/i.test(message) ? 403 : 401;
+    const status = /server owner|not a member/i.test(message) ? 403 : 401;
     return jsonError(message, status);
   }
 }
@@ -64,7 +64,7 @@ export async function POST(request: Request, { params }: RouteContext): Promise<
   } catch (error) {
     if (error instanceof DiscordApiError && error.status === 403) {
       return jsonError(
-        "Discord denied the nickname change. Make sure the bot's server role has the Change Nickname permission enabled.",
+        "Discord denied the nickname change. In Server Settings → Roles, enable Change Nickname for the bot's role, then try again.",
         403,
       );
     }

@@ -40,6 +40,26 @@ export async function requireGuildManager(guildId: string) {
   return { user: session.user, guild };
 }
 
+export async function requireGuildOwner(guildId: string) {
+  const session = await getSession();
+  if (!session) {
+    throw new Error("You need to sign in with Discord first.");
+  }
+
+  const guilds = await loadGuilds(session);
+  const guild = guilds.find((entry) => entry.id === guildId);
+
+  if (!guild) {
+    throw new Error("You are not a member of this server.");
+  }
+
+  if (!guild.owner) {
+    throw new Error("Only the server owner can change the bot profile.");
+  }
+
+  return { user: session.user, guild };
+}
+
 /**
  * Loads the guild list, refreshing the Discord token when it has expired.
  * A dead refresh token becomes a regular, user readable error so server

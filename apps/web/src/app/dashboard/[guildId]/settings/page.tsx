@@ -73,7 +73,7 @@ export default async function SettingsPage({
       <BotProfileForm
         guildId={guildId}
         initialNickname={botMember.nick}
-        disabled={!context.canManage}
+        isOwner={context.isOwner}
       />
 
       <Card title="Server" description="Information fetched from Discord.">
