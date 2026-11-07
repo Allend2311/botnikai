@@ -1,4 +1,4 @@
-import { DiscordApiError, getBotUser, getGuildMember, setGuildMemberNickname } from "@/lib/discord";
+import { DiscordApiError, getBotUser, getGuildMember, setCurrentBotNickname } from "@/lib/discord";
 import { requireGuildManager } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -58,13 +58,15 @@ export async function POST(request: Request, { params }: RouteContext): Promise<
   }
 
   try {
-    const botUser = await getBotUser();
     const savedNickname = nickname || null;
-    await setGuildMemberNickname(guildId, botUser.id, savedNickname);
+    await setCurrentBotNickname(guildId, savedNickname);
     return Response.json({ ok: true, nickname: savedNickname });
   } catch (error) {
     if (error instanceof DiscordApiError && error.status === 403) {
-      return jsonError("The bot needs permission to change its nickname in this server.", 403);
+      return jsonError(
+        "Discord denied the nickname change. Make sure the bot's server role has the Change Nickname permission enabled.",
+        403,
+      );
     }
     if (error instanceof DiscordApiError && error.status === 404) {
       return jsonError("The bot is not in this server.", 404);

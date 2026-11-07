@@ -655,6 +655,13 @@ export async function setGuildMemberNickname(
   });
 }
 
+export async function setCurrentBotNickname(guildId: string, nickname: string | null): Promise<void> {
+  await discordRequest<void>(`/guilds/${guildId}/members/@me`, {
+    method: "PATCH",
+    body: { nick: nickname },
+  });
+}
+
 /** Permissions the bot asks for when it is invited to a server. */
 export const BOT_INVITE_PERMISSIONS =
   0n |
