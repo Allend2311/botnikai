@@ -81,16 +81,21 @@ export default async function DashboardPage() {
             <Logo showTagline={false} />
             <div className="flex items-center gap-2 sm:gap-3">
               {isOwner && (
-                <Link
-                  href="/owner/broadcast"
-                  className="btn btn-ghost px-3 py-2 text-xs"
-                  title="Send a bot update to every server"
-                >
-                  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-                    <path d="M4 11a8 8 0 0 1 8-8m0 18a8 8 0 0 0 8-8M8 12a4 4 0 0 1 4-4m0 8a4 4 0 0 0 4-4" strokeLinecap="round" />
-                  </svg>
-                  Broadcast
-                </Link>
+                <>
+                  <Link href="/owner/profile" className="btn btn-ghost px-3 py-2 text-xs">
+                    Bot profile
+                  </Link>
+                  <Link
+                    href="/owner/broadcast"
+                    className="btn btn-ghost px-3 py-2 text-xs"
+                    title="Send a bot update to every server"
+                  >
+                    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                      <path d="M4 11a8 8 0 0 1 8-8m0 18a8 8 0 0 0 8-8M8 12a4 4 0 0 1 4-4m0 8a4 4 0 0 0 4-4" strokeLinecap="round" />
+                    </svg>
+                    Broadcast
+                  </Link>
+                </>
               )}
               <div className="flex items-center gap-2.5 rounded-full border border-white/[0.07] bg-white/[0.025] py-1 pl-1 pr-2 sm:pr-3">
                 {avatar ? (

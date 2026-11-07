@@ -647,7 +647,7 @@ export async function addGuildMemberRole(
 export async function setGuildMemberNickname(
   guildId: string,
   userId: string,
-  nickname: string,
+  nickname: string | null,
 ): Promise<void> {
   await discordRequest<void>(`/guilds/${guildId}/members/${userId}`, {
     method: "PATCH",

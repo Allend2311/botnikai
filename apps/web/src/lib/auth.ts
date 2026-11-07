@@ -33,7 +33,7 @@ export async function requireGuildManager(guildId: string) {
     throw new Error("You are not a member of this server.");
   }
 
-  if (!canManageGuild(guild.permissions)) {
+  if (!guild.owner && !canManageGuild(guild.permissions)) {
     throw new Error("You need the Manage Server permission to change these settings.");
   }
 

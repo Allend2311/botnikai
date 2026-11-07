@@ -75,10 +75,13 @@ export function Input({
   placeholder,
   required,
   readOnly,
+  disabled,
   min,
   max,
+  minLength,
   maxLength,
   step,
+  accept,
   onChange,
   className = "",
 }: {
@@ -90,10 +93,13 @@ export function Input({
   placeholder?: string;
   required?: boolean;
   readOnly?: boolean;
+  disabled?: boolean;
   min?: number;
   max?: number;
+  minLength?: number;
   maxLength?: number;
   step?: number;
+  accept?: string;
   onChange?: ChangeEventHandler<HTMLInputElement>;
   className?: string;
 }) {
@@ -105,10 +111,13 @@ export function Input({
       placeholder={placeholder}
       required={required}
       readOnly={readOnly}
+      disabled={disabled}
       min={min}
       max={max}
+      minLength={minLength}
       maxLength={maxLength}
       step={step}
+      accept={accept}
       onChange={onChange}
       className={`${controlClass} ${className}`}
       {...(value !== undefined ? { value } : { defaultValue })}

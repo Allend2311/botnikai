@@ -7,6 +7,8 @@ import { Card, Field, Input } from "@/components/ui";
 import { ChannelSelect } from "@/components/selects";
 import { SubmitButton } from "@/components/submit-button";
 import { PageHeader } from "@/components/page-header";
+import { getBotUser, getGuildMember } from "@/lib/discord";
+import { BotProfileForm } from "./bot-profile-form";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +23,9 @@ export default async function SettingsPage({
 
   const { settings, guild, channels } = context;
   const channelSelect = channelOptions(textChannels(channels));
+  const botUser = await getBotUser();
+  const botMember = await getGuildMember(guildId, botUser.id);
+  if (!botMember) notFound();
 
   return (
     <div className="space-y-6">
@@ -64,6 +69,12 @@ export default async function SettingsPage({
           <SubmitButton disabled={!context.canManage}>Save settings</SubmitButton>
         </div>
       </form>
+
+      <BotProfileForm
+        guildId={guildId}
+        initialNickname={botMember.nick}
+        disabled={!context.canManage}
+      />
 
       <Card title="Server" description="Information fetched from Discord.">
         <dl className="divide-y divide-white/[0.06]">

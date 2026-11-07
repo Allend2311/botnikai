@@ -121,7 +121,7 @@ export const getGuildContext = cache(
       automod: restAutomod as Omit<AutomodConfig, "guildId" | "updatedAt">,
       channels,
       roles,
-      canManage: userGuild ? canManageGuild(userGuild.permissions) : false,
+      canManage: userGuild ? userGuild.owner || canManageGuild(userGuild.permissions) : false,
       canAdmin: userGuild ? isGuildAdministrator(userGuild.permissions) : false,
       isMember: Boolean(userGuild),
     };
