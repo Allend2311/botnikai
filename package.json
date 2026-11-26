@@ -27,6 +27,7 @@
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
+    "db:seed:moderation": "tsx -r dotenv/config prisma/seed-moderation-samples.ts",
     "deploy:commands": "npm run deploy:commands -w @guardbot/bot",
     "typecheck": "npm run typecheck -w @guardbot/bot && npm run typecheck -w @guardbot/web"
   },

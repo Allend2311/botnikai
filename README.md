@@ -274,6 +274,13 @@ on a deterministic 20% held-out split, but with few samples it is only a rough
 signal. The model is a ranking/assist tool; automod enforcement still uses the
 configured rules and does not call the model automatically.
 
+A fresh install has no removed messages to learn from, so run
+`npm run db:seed:moderation` once to load labelled bootstrap examples based on
+the automod rules and train the first model. It is safe to re-run: it replaces
+only its own `BOOTSTRAP` rows and retrains, leaving real automod samples and
+hand-added samples untouched. Retrain any time from `/owner/model` as real
+samples accumulate.
+
 > **Privacy:** sign-in IPs and removed-message samples are personal data. Tell
 > users in your privacy policy that sign-in IPs are logged for security and that
 > removed messages may be retained briefly to train moderation filters.

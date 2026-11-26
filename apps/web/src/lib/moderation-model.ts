@@ -101,15 +101,44 @@ const BENIGN_SAMPLES: string[] = [
   "this playlist is perfect for studying",
 ];
 
-/** Normalizes URLs, mentions and long numbers before splitting into tokens. */
+/**
+ * Normalizes URLs, mentions and long numbers before splitting into tokens.
+ * Invite domains and other domains get separate markers so an unseen invite
+ * code still looks like an invite. Case and repetition are added as explicit
+ * features because lowercasing would otherwise erase the CAPS/SPAM signal.
+ */
 export function tokenize(text: string): string[] {
-  const cleaned = String(text ?? "")
+  const raw = String(text ?? "");
+  const features: string[] = [];
+
+  // Automod fires on these signals regardless of the surrounding words, so
+  // they must outweigh ordinary vocabulary. Emitting each marker three times
+  // lets the model learn that it is the marker, not words like "join" or
+  // "hello", that decides the label.
+  const STRONG_REPEAT = 3;
+
+  const letters = raw.replace(/[^a-zA-Z]/g, "");
+  if (letters.length >= 20 && (letters.match(/[A-Z]/g)?.length ?? 0) / letters.length > 0.5) {
+    features.push(...Array(STRONG_REPEAT).fill("capsfeature"));
+  }
+
+  const wordCounts = new Map<string, number>();
+  for (const word of raw.toLowerCase().match(/[\p{L}]+/gu) ?? []) {
+    wordCounts.set(word, (wordCounts.get(word) ?? 0) + 1);
+  }
+  if (Math.max(0, ...wordCounts.values()) >= 4) {
+    features.push(...Array(STRONG_REPEAT).fill("repetitionfeature"));
+  }
+
+  const cleaned = raw
     .toLowerCase()
-    .replace(/https?:\/\/[^\s<>"']+/g, " urltoken ")
+    .replace(/(?:https?:\/\/)?(?:discord(?:app)?\.com\/invite|discord\.gg|discord\.me|dsc\.gg)\/[\w-]+/gi, " invitetoken invitetoken invitetoken ")
+    .replace(/(?:https?:\/\/)?(?:[a-z0-9-]+\.)+[a-z]{2,}(?:\/[^\s<>"']*)?/gi, " urltoken urltoken urltoken ")
     .replace(/<@!?&?\d+>/g, " usermention ")
     .replace(/\b\d{2,}\b/g, " numbertoken ");
 
-  return cleaned.match(/[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)?|[^\s]/gu) ?? [];
+  const tokens = cleaned.match(/[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)?|[^\s]/gu) ?? [];
+  return [...features, ...tokens];
 }
 
 function hash(text: string): number {
