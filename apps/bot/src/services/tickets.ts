@@ -41,7 +41,7 @@ export function closeTicketButton(ticketId: string): ActionRowData<MessageAction
         type: ComponentType.Button,
         style: ButtonStyle.Danger,
         customId: `ticket:close:${ticketId}`,
-        label: "Close ticket",
+        label: "Admin: close ticket",
         emoji: { name: "🔒" },
       },
     ],
@@ -113,7 +113,7 @@ export async function createTicket(guild: Guild, member: GuildMember, panelId: s
   const embed = baseEmbed(`Ticket opened by ${member.user.username}`)
     .setColor(0x6366f1)
     .setDescription(
-      `Welcome ${member.user}! A member of the support team will be with you shortly.\nUse the button below once you are done.`,
+      `Welcome ${member.user}! A member of the support team will be with you shortly.\nA server Administrator can close this ticket when it is resolved.`,
     )
     .addFields({ name: "Ticket ID", value: ticket.id, inline: true });
 
@@ -150,6 +150,11 @@ export async function buildTranscript(channel: TextChannel): Promise<string> {
 }
 
 export async function closeTicket(guild: Guild, ticketId: string, closedBy: string): Promise<string> {
+  const member = await guild.members.fetch(closedBy);
+  if (!member.permissions.has(PermissionFlagsBits.Administrator)) {
+    throw new Error("Only server Administrators can close tickets.");
+  }
+
   const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
   if (!ticket) throw new Error("Ticket not found.");
   if (ticket.status === "CLOSED") throw new Error("This ticket is already closed.");

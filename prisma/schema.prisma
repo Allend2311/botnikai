@@ -32,6 +32,7 @@ model User {
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
   sessions   Session[]
+  ipEvents   IpLoginEvent[]
 }
 
 model Session {
@@ -356,4 +357,50 @@ model TicketTranscript {
   createdAt DateTime @default(now())
 
   @@index([ticketId])
+}
+
+// ---------------------------------------------------------------------------
+// Owner-only admin: sign-in IP history + moderation model
+// ---------------------------------------------------------------------------
+
+/** IP addresses seen for signed-in users. Only the bot owner can read these. */
+model IpLoginEvent {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ip        String
+  userAgent String?
+  kind      String   @default("USAGE") // LOGIN | USAGE
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([ip, createdAt])
+}
+
+/**
+ * Labelled text used to train the moderation classifier. Samples are written
+ * when the automod removes a message; old AUTOMOD cases with a `matched`
+ * value are folded in when training.
+ */
+model ModerationSample {
+  id        String   @id @default(cuid())
+  guildId   String?
+  label     String // CLEAN | INVITE | LINK | WORD | CAPS | SPAM
+  content   String   @db.Text
+  source    String   @default("AUTOMOD") // AUTOMOD | CASE | BENIGN
+  createdAt DateTime @default(now())
+
+  @@index([label, createdAt])
+}
+
+/** Serialized classifier artifact, produced by the owner's Train action. */
+model TrainedModel {
+  id          String   @id @default(cuid())
+  algorithm   String   @default("multinomial-naive-bayes")
+  labels      String   @db.Text // JSON string[]
+  artifact    String   @db.Text // JSON: vocabulary, token counts, totals
+  sampleCount Int
+  accuracy    Float?
+  trainedBy   String?
+  trainedAt   DateTime @default(now())
 }

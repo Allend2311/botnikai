@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { isBotOwner } from "@/lib/owners";
+import { recordUsageIp } from "@/lib/ip";
 import { getSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +14,8 @@ export default async function OwnerLayout({ children }: { children: React.ReactN
   if (!session) redirect("/");
 
   if (!(await isBotOwner(session.user.discordId))) notFound();
+
+  await recordUsageIp(session.user.id);
 
   return <>{children}</>;
 }

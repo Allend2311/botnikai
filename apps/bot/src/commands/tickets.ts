@@ -247,7 +247,6 @@ export const ticketCommand: Command = {
     const isSupport =
       isManager ||
       Boolean(panel?.supportRoleId && member.roles.cache.has(panel.supportRoleId));
-    const isOwner = ticket.userId === interaction.user.id;
 
     if (sub === "info") {
       const transcripts = await prisma.ticketTranscript.count({ where: { ticketId: ticket.id } });
@@ -278,9 +277,9 @@ export const ticketCommand: Command = {
     }
 
     if (sub === "close") {
-      if (!isOwner && !isSupport) {
+      if (!member.permissions.has(PermissionFlagsBits.Administrator)) {
         await interaction.reply({
-          embeds: [errorEmbed("Only the ticket owner or the support team can close this ticket.")],
+          embeds: [errorEmbed("Only server Administrators can close tickets.")],
           ephemeral: true,
         });
         return;

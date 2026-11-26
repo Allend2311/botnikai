@@ -8,7 +8,7 @@ import { createHash } from "node:crypto";
  */
 
 const API_BASE = "https://discord.com/api/v10";
-const FALLBACK_APP_URL = "http://localhost:3000";
+const FALLBACK_APP_URL = "https://kaibots.netlify.app";
 const USER_GUILD_CACHE_TTL_MS = 30_000;
 const userGuildCache = new Map<
   string,
@@ -39,35 +39,18 @@ export function normaliseAppUrl(value: string | null | undefined): string | null
 /**
  * Public origin of the website.
  *
- * `APP_URL` wins so the bot and the website always agree. When it is missing the
- * Netlify-provided deploy variables are used instead, followed by localhost.
+ * `APP_URL` wins so the bot and the website always agree. Netlify's site URL is
+ * preferred over deploy-specific URLs; local development falls back to localhost.
  */
 export function getAppUrl(): string {
   return (
     normaliseAppUrl(process.env.APP_URL) ??
     normaliseAppUrl(process.env.NEXT_PUBLIC_APP_URL) ??
-    normaliseAppUrl(process.env.DEPLOY_PRIME_URL) ??
     normaliseAppUrl(process.env.URL) ??
-    FALLBACK_APP_URL
+    (process.env.NODE_ENV !== "production"
+      ? normaliseAppUrl(process.env.DEPLOY_PRIME_URL) ?? "http://localhost:3000"
+      : FALLBACK_APP_URL)
   );
-}
-
-/** Same as `getAppUrl`, but falls back to the host the request arrived on (Netlify, proxies). */
-export function getAppUrlForHeaders(headers: Headers): string {
-  const forwardedHost = headers.get("x-forwarded-host") ?? headers.get("host") ?? "";
-  const forwardedProto = headers.get("x-forwarded-proto") ?? "https";
-
-  return (
-    normaliseAppUrl(process.env.APP_URL) ??
-    normaliseAppUrl(process.env.NEXT_PUBLIC_APP_URL) ??
-    normaliseAppUrl(`${forwardedProto}://${forwardedHost}`) ??
-    FALLBACK_APP_URL
-  );
-}
-
-/** Convenience wrapper around `getAppUrlForHeaders` for a route handler request. */
-export function getAppUrlForRequest(request: Request): string {
-  return getAppUrlForHeaders(request.headers);
 }
 
 /** The exact URL that must be registered in the Discord Developer Portal. */

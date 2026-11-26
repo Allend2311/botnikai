@@ -2,11 +2,11 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import {
   exchangeCode,
-  getAppUrlForRequest,
   getCurrentUser,
   getOAuthRedirectUri,
 } from "@/lib/discord";
 import { prisma } from "@/lib/prisma";
+import { readClientIp, recordIpEvent } from "@/lib/ip";
 import {
   createSession,
   OAUTH_REDIRECT_COOKIE,
@@ -44,8 +44,7 @@ export async function GET(request: Request): Promise<never> {
 
   // Prefer the URL captured at login time; fall back to the configured origin
   // so older in-flight logins still complete.
-  const redirectUri =
-    storedRedirectUri ?? getOAuthRedirectUri(getAppUrlForRequest(request));
+  const redirectUri = storedRedirectUri ?? getOAuthRedirectUri();
 
   let token: Awaited<ReturnType<typeof exchangeCode>>;
   try {
@@ -83,6 +82,13 @@ export async function GET(request: Request): Promise<never> {
       userId: user.id,
       accessToken: token.access_token,
       refreshToken: token.refresh_token,
+    });
+
+    await recordIpEvent({
+      userId: user.id,
+      ip: readClientIp(request.headers),
+      userAgent: request.headers.get("user-agent"),
+      kind: "LOGIN",
     });
   } catch (error) {
     console.error("[auth] Could not create the session:", error);

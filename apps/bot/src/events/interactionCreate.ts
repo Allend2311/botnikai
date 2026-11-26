@@ -492,6 +492,14 @@ async function handleButton(client: Client, interaction: ButtonInteraction): Pro
     }
 
     if (action === "close") {
+      if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+        await interaction.reply({
+          embeds: [errorEmbed("Only server Administrators can close tickets.")],
+          ephemeral: true,
+        });
+        return;
+      }
+
       await interaction.deferReply({ ephemeral: true });
       await closeTicket(guild, id, interaction.user.id);
       await interaction.editReply({

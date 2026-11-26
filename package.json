@@ -32,6 +32,7 @@
   },
   "devDependencies": {
     "concurrently": "^9.1.2",
+    "cypress": "^16.2.1",
     "prisma": "^6.1.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
@@ -48,6 +49,7 @@
     "prisma@6.19.3": true,
     "@prisma/client@6.19.3": true,
     "@prisma/engines@6.19.3": true,
-    "esbuild@0.28.2": true
+    "esbuild@0.28.2": true,
+    "cypress@16.2.1": true
   }
 }

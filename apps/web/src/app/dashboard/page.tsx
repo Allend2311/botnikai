@@ -82,6 +82,9 @@ export default async function DashboardPage() {
             <div className="flex items-center gap-2 sm:gap-3">
               {isOwner && (
                 <>
+                  <Link href="/owner" className="btn btn-ghost px-3 py-2 text-xs">
+                    Admin
+                  </Link>
                   <Link href="/owner/profile" className="btn btn-ghost px-3 py-2 text-xs">
                     Bot profile
                   </Link>

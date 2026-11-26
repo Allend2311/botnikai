@@ -32,7 +32,7 @@ const envSchema = z.object({
   DISCORD_APPLICATION_ID: z.string().min(1, "DISCORD_APPLICATION_ID is required"),
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required (Supabase connection string)"),
   DIRECT_URL: z.string().optional(),
-  APP_URL: z.string().default("http://localhost:3000"),
+  APP_URL: z.string().default("https://kaibots.netlify.app"),
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
 });
 

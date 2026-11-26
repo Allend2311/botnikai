@@ -15,13 +15,14 @@ The database is **Prisma Postgres** — the bot and the dashboard share it.
 | **Moderation** | `/ban` `/kick` `/mute` `/warn` `/purge` `/lock` `/slowmode`, case history, warning tracking and a mod-log channel. |
 | **Auto-moderation** | Blocks Discord invites, external links (with domain allow-list), spam, excessive caps and banned words. Per-rule actions, per-channel/role ignores. |
 | **Welcome & roles** | Custom welcome and farewell messages with template tokens, uploaded image/GIF embeds and DMs, automatic auto-roles and emoji reaction roles. |
-| **Tickets** | Support panels posted by the bot, private ticket channels, support roles, transcripts and a ticket history. |
+| **Tickets** | Support panels posted by the bot, private ticket channels, support roles, transcripts and a ticket history. Only server Administrators can close tickets. |
 | **Message templates** | Reusable messages with scheduled delivery, join/leave/role-added automations and sticky channel posts. |
 | **Role requests** | Any server member can post an in-game name and nominate a voucher. Requests and review cards stay in the submitting server channel; the bot does not DM applicants or vouchers. |
 | **Announcements** | Administrators can post styled announcements with an optional image or GIF and optional `@everyone` / `@here` pings using `/announcement send`. |
 | **Kick & TikTok live pings** | Uses Discord presence updates to announce matching Kick/TikTok streaming activities and ping a configured role; no platform API is used. |
 | **New post notifications** | Reposts new Discord forum/channel posts into an announcement channel. External-platform videos are not monitored. |
 | **Dashboard** | Discord OAuth2 login, server picker, pages for every setting, and a live bot online/offline indicator. |
+| **Owner admin area** | Private `/owner` tools: sign-in IP history for signed-in users and an on-demand moderation text classifier trained on removed messages. |
 
 ---
 
@@ -189,8 +190,8 @@ PostgreSQL database created above.
    - `DISCORD_APPLICATION_ID`
    - `DATABASE_URL`
    - `DIRECT_URL`
-   - `APP_URL` — the public dashboard URL if you have one. This is used for dashboard
-     links shown by bot commands; it does not host or run the dashboard.
+   - `APP_URL` is preconfigured as `https://kaibots.netlify.app` for dashboard links
+     shown by bot commands; it does not host or run the dashboard.
 4. Apply any pending database migrations once with `npm run db:deploy` from the
    repository root, using a local `.env` configured for the same hosted database.
    Keep `.env` and all credentials out of GitHub.
@@ -204,6 +205,10 @@ Bot and database scripts:
 
 | Command | Description |
 | --- | --- |
+| `run-bot-hidden.vbs` (Windows) | Start the bot in the background without opening a terminal; live output is written to `bot-run.txt` |
+| `run-bot.bat` (Windows) | Build the shared package and start the bot in a visible terminal for troubleshooting |
+| `stop-bot-hidden.vbs` (Windows) | Stop the local bot without opening a terminal |
+| `stop-bot.bat` (Windows) | Stop the local bot from a terminal or command prompt |
 | `npm run build:shared` | Build the shared package required by the bot |
 | `npm run build:bot` | Build the bot |
 | `npm run start:bot` | Run the built bot |
@@ -220,14 +225,15 @@ Bot and database scripts:
 
 1. Open the website and click **Sign in** — you are redirected to Discord for OAuth2
    (`identify guilds guilds.members.read`).
-2. Pick a server. Only servers where the bot is installed **and** where you have the
-   **Manage Server** permission are listed.
+2. Pick a server. Only servers where the bot is installed **and** where you have
+   **Administrator** or **Manage Server** permission are listed. Server Administrators
+   can use every feature scoped to that server.
 3. Configure auto-moderation, welcome messages, roles, tickets and notifications.
    Every change is written to the same database the bot reads, so it takes effect
    immediately.
-   Under **Messages → Templates**, create and save reusable text/embed messages, preview
-   them, and send a saved template to a selected text channel. Schedule, Automate, Sticky,
-   and message components are not available yet.
+   Under **Messages → Templates**, create, preview, duplicate, delete, and send reusable
+   text/embed messages to a selected text channel. Administrators can also schedule
+   messages, configure join/leave/role-added automations, and manage sticky posts.
 4. For Kick/TikTok live announcements, enable the Server Presence and Server Members
    intents in the Discord Developer Portal, enable **Live announcements**, and choose
    the announcement channel and any combination of role, `@everyone`, or `@here` pings.
@@ -243,6 +249,37 @@ Bot and database scripts:
 
 ---
 
+## Owner admin area
+
+The `/owner` section is hidden behind the same Discord login as the dashboard and
+is only reachable by the bot owner (`BOT_OWNER_IDS`, or the Discord application
+owner/team when that variable is empty). Everyone else gets a 404, and every
+owner API returns 401/404 for non-owners.
+
+- **Overview** (`/owner`) — activity summary and quick links.
+- **IP log** (`/owner/security`) — addresses seen for **signed-in users only**.
+  A `LOGIN` event is written when Discord OAuth completes; page views write a
+  throttled `USAGE` event (one per user + IP per hour). Netlify's
+  `x-nf-client-connection-ip` is preferred, with standard proxy headers as
+  fallbacks. Anonymous visitors are never recorded.
+- **Moderation model** (`/owner/model`) — trains a small multinomial Naive Bayes
+  text classifier on demand, stores the JSON artifact in Postgres, and offers a
+  text-classification playground.
+
+Training data comes from three places: messages the automod removed (stored as
+labelled samples by the bot), the `matched` text on older `AUTOMOD` cases, and
+samples you add by hand in the trainer. Built-in benign examples provide the
+`CLEAN` class — ordinary conversations are not harvested. Accuracy is measured
+on a deterministic 20% held-out split, but with few samples it is only a rough
+signal. The model is a ranking/assist tool; automod enforcement still uses the
+configured rules and does not call the model automatically.
+
+> **Privacy:** sign-in IPs and removed-message samples are personal data. Tell
+> users in your privacy policy that sign-in IPs are logged for security and that
+> removed messages may be retained briefly to train moderation filters.
+
+---
+
 ## Slash commands
 
 **Moderation** — `/ban` `/unban` `/kick` `/softban` `/mute` `/unmute` `/warn` `/warnings` `/removewarn`
@@ -251,7 +288,7 @@ Bot and database scripts:
 **Configuration** — `/settings` `/logs` `/automod`
 
 **Setup** — `/welcome` `/goodbye` `/autorole` `/reactionrole` `/ticketpanel`
-`/ticket` (create · close · rename · list) `/liveconfig` `/livecheck` `/postconfig` `/posttest`
+`/ticket` (create · admin-only close · rename · list) `/liveconfig` `/livecheck` `/postconfig` `/posttest`
 
 **Role requests & announcements** — `/rolerequest submit`
 `/announcement send`
@@ -260,7 +297,10 @@ Bot and database scripts:
 
 Slash commands are available in every server where the bot is installed. Only
 members with the Discord **Administrator** permission in that server can use
-administrative commands; `/rolerequest submit` is available to all server members.
+administrative commands; `/rolerequest submit` and utility commands are available to
+all server members. Server Administrators bypass command-specific permission
+requirements. `/broadcast` is intentionally bot-owner-only because it can send a
+message across every server; it is not a server-scoped administrator feature.
 After changing or deploying command permissions, run `npm run deploy:commands` to
 update Discord's registered global commands. Global command updates can take up to
 an hour to appear.
@@ -271,7 +311,9 @@ Use `/liveconfig everyone` and `/liveconfig here`, or `/postconfig everyone` and
 `/announcement send` also has optional `ping-everyone` and `ping-here` options.
 The dashboard's **Messages** page includes reusable templates, scheduled sends,
 member-event automations and sticky posts. Scheduled messages are sent while the
-bot is online; the dashboard shows the bot's last reported online status.
+bot is online; the dashboard shows the bot's last reported online status. Dashboard
+changes require **Administrator** or **Manage Server** permission in the selected
+server.
 The nominated voucher must confirm each role request before an Administrator can
 review it. The bot posts a review card in the channel where the request was
 submitted, and does not DM the applicant or voucher. An Administrator can approve
@@ -342,7 +384,7 @@ the bot and the website, and reads the database connection strings from `.env`.
 | Slash commands do not appear | Restart the bot and check for `Commands registered in guild <ID>` in its logs. Confirm the bot is installed in the server with `applications.commands` and the user has Administrator permission there. |
 | Bot only works in one server | Commands used to be registered as guild-only. Run `npm run deploy:commands` again (it now also registers global commands), then check **Bot → Public Bot** in the developer portal. |
 | `Environment variable not found: DATABASE_URL` | Create `.env` in the repository root (not inside `apps/*`). |
-| OAuth2 redirect error | The redirect URL in the developer portal must exactly match `APP_URL` + `/api/auth/callback`. Open the landing page after a failed sign-in — it prints the exact URL the site is using. `APP_URL` must be set in Netlify's environment variables (the local `.env` is not deployed) and must not end with `/`. |
+| OAuth2 redirect error | Register `https://kaibots.netlify.app/api/auth/callback` in the Discord Developer Portal. It must exactly match `APP_URL` + `/api/auth/callback`. Open the landing page after a failed sign-in — it prints the exact URL the site is using. |
 | `P1001: Can't reach database server` | Check the host and port in `DATABASE_URL`, then check your network connection. |
 | `P1010: User was denied access on the database` | Check the username and password in the connection string and confirm they match the database project. |
 | Migration connection errors | Set `DIRECT_URL` to a direct connection string if your database provider supplies one. |

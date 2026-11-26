@@ -2,7 +2,6 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import {
   buildAuthorizeUrl,
-  getAppUrlForRequest,
   getOAuthRedirectUri,
 } from "@/lib/discord";
 import {
@@ -13,7 +12,7 @@ import {
 
 export async function GET(request: Request): Promise<never> {
   const state = crypto.randomUUID();
-  const redirectUri = getOAuthRedirectUri(getAppUrlForRequest(request));
+  const redirectUri = getOAuthRedirectUri();
 
   const store = await cookies();
   const cookieOptions = {

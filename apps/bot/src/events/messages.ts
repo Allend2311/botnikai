@@ -27,6 +27,22 @@ async function handleViolation(message: Message, violation: NonNullable<Awaited<
     /* the message may have been deleted already */
   }
 
+  // Keep the removed text as a labelled training sample for the owner's
+  // moderation classifier. Empty messages (e.g. mention-only spam) are skipped.
+  const sampleText = (message.content ?? "").trim();
+  if (sampleText) {
+    await prisma.moderationSample
+      .create({
+        data: {
+          guildId: guild.id,
+          label: violation.kind,
+          content: sampleText.slice(0, 2000),
+          source: "AUTOMOD",
+        },
+      })
+      .catch((error) => logger.warn("automod", `Could not store a training sample: ${(error as Error).message}`));
+  }
+
   let escalation = "";
   let memberId = message.author.id;
 

@@ -10,6 +10,7 @@ import {
   type AutomodAction,
 } from "@guardbot/shared";
 import type { Prisma } from "@prisma/client";
+import { config } from "../config";
 import { prisma } from "../lib/db";
 import { errorEmbed, successEmbed } from "../lib/embeds";
 import { getAutomodConfig, getGuildSettings, invalidateConfigCache, parseJsonArray } from "../lib/settings";
@@ -515,7 +516,7 @@ export const settingsCommand: Command = {
       prisma.roleRequest.count({ where: { guildId: guild.id, status: { in: ["PENDING_VOUCH", "PENDING_REVIEW"] } } }),
     ]);
 
-    const dashboard = `${process.env.APP_URL ?? "http://localhost:3000"}/dashboard/${guild.id}`;
+    const dashboard = `${config.APP_URL}/dashboard/${guild.id}`;
     const autoRoles = parseJsonArray(settings.autoRoleIds);
 
     const embed = new EmbedBuilder()

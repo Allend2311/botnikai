@@ -1,8 +1,7 @@
 import Link from "next/link";
-import { headers } from "next/headers";
 import { APP_TAGLINE } from "@guardbot/shared";
 import { WEBSITE_DESCRIPTION, WEBSITE_NAME } from "@/lib/brand";
-import { getAppUrlForHeaders, getOAuthRedirectUri, inviteUrl } from "@/lib/discord";
+import { getOAuthRedirectUri, inviteUrl } from "@/lib/discord";
 import { getSessionUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { SiteHeader } from "@/components/site-header";
@@ -239,8 +238,7 @@ export default async function HomePage({
   searchParams: Promise<{ error?: string; reason?: string }>;
 }) {
   const { error, reason } = await searchParams;
-  const requestHeaders = await headers();
-  const redirectUri = getOAuthRedirectUri(getAppUrlForHeaders(requestHeaders));
+  const redirectUri = getOAuthRedirectUri();
   const failureHint =
     reason === "token_exchange"
       ? "Discord rejected the sign-in code. This almost always means the redirect URL below is not listed exactly like that in the Discord Developer Portal."

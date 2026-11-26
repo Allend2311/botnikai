@@ -48,7 +48,7 @@ export const helpCommand: Command = {
     const embed = new EmbedBuilder()
       .setTitle(`${APP_NAME} commands`)
       .setColor(0x6366f1)
-      .setFooter({ text: "Manage everything from the dashboard at " + (process.env.APP_URL ?? "http://localhost:3000") });
+      .setDescription("[Visit the KaiBots website](https://kaibots.netlify.app)");
 
     for (const group of groups) {
       const lines = group.commands.map((command) => `\`/${command.data.name}\` — ${command.data.description}`);

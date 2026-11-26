@@ -168,6 +168,8 @@ export function Select({
   id,
   options,
   defaultValue,
+  value,
+  onChange,
   required,
   className = "",
 }: {
@@ -175,6 +177,8 @@ export function Select({
   id?: string;
   options: Array<{ value: string; label: string }>;
   defaultValue?: string | null;
+  value?: string;
+  onChange?: ChangeEventHandler<HTMLSelectElement>;
   required?: boolean;
   className?: string;
 }) {
@@ -182,7 +186,8 @@ export function Select({
     <select
       id={id ?? name}
       name={name}
-      defaultValue={defaultValue ?? ""}
+      {...(value !== undefined ? { value } : { defaultValue: defaultValue ?? "" })}
+      onChange={onChange}
       required={required}
       className={`${controlClass} appearance-none bg-[length:1rem] pr-9 ${className}`}
       style={{
