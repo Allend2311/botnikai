@@ -3,6 +3,7 @@
   publish = "apps/web/.next"
 
 [build.environment]
+  NODE_ENV = "production"
   NODE_VERSION = "20"
   NEXT_TELEMETRY_DISABLED = "1"
   APP_URL = "https://kaibots.netlify.app"
