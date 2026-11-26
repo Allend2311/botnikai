@@ -16,6 +16,7 @@ function generatePatchnotes() {
   const commit = process.env.COMMIT_REF || git(["rev-parse", "HEAD"]);
   const subject = git(["show", "-s", "--format=%s", commit]);
   const body = git(["show", "-s", "--format=%b", commit])
+    .replace(/\\n/g, "\n")
     .split(/\r?\n/)
     .filter((line) => !/^Co-authored-by:/i.test(line))
     .join("\n")
