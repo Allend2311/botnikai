@@ -1,3 +1,5 @@
+import { formatLogTimestamp } from "@guardbot/shared";
+
 const COLORS = {
   reset: "\x1b[0m",
   gray: "\x1b[90m",
@@ -18,12 +20,8 @@ const LEVEL_COLOR: Record<Level, string> = {
   error: COLORS.red,
 };
 
-function timestamp(): string {
-  return new Date().toISOString().replace("T", " ").slice(0, 19);
-}
-
 function write(level: Level, scope: string, message: string, extra?: unknown): void {
-  const line = `${COLORS.gray}${timestamp()}${COLORS.reset} ${LEVEL_COLOR[level]}${level.toUpperCase().padEnd(5)}${COLORS.reset} ${COLORS.magenta}${scope}${COLORS.reset} ${message}`;
+  const line = `${COLORS.gray}${formatLogTimestamp()}${COLORS.reset} ${LEVEL_COLOR[level]}${level.toUpperCase().padEnd(5)}${COLORS.reset} ${COLORS.magenta}${scope}${COLORS.reset} ${message}`;
   if (extra !== undefined) {
     console.log(line, extra);
   } else {

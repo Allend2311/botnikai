@@ -1,3 +1,4 @@
+import { formatDateTime } from "@guardbot/shared";
 import { OwnerChrome } from "@/components/owner-chrome";
 import { PageHeader } from "@/components/page-header";
 import { Badge, Card, EmptyState, Stat } from "@/components/ui";
@@ -6,11 +7,6 @@ import { getSessionUser } from "@/lib/session";
 import { ModelConsole } from "./model-console";
 
 export const dynamic = "force-dynamic";
-
-const dateFormat = new Intl.DateTimeFormat("en-US", {
-  dateStyle: "medium",
-  timeStyle: "short",
-});
 
 const LABEL_TONES: Record<string, "green" | "red" | "amber" | "blue" | "violet" | "neutral"> = {
   CLEAN: "green",
@@ -48,7 +44,7 @@ export default async function OwnerModelPage() {
         <Stat
           label="Last accuracy"
           value={model?.accuracy == null ? "—" : `${Math.round(model.accuracy * 100)}%`}
-          hint={model ? `Trained ${dateFormat.format(model.trainedAt)}` : "No model yet"}
+          hint={model ? `Trained ${formatDateTime(model.trainedAt)}` : "No model yet"}
         />
       </div>
 
@@ -87,8 +83,8 @@ export default async function OwnerModelPage() {
                   <dd className="text-slate-300">{model.trainedBy ?? "—"}</dd>
                 </div>
                 <div className="flex justify-between gap-3">
-                  <dt className="text-slate-500">Trained at</dt>
-                  <dd className="text-slate-300">{dateFormat.format(model.trainedAt)}</dd>
+                  <dt className="text-slate-500">Trained at (PH time)</dt>
+                  <dd className="text-slate-300">{formatDateTime(model.trainedAt)}</dd>
                 </div>
               </dl>
             </Card>

@@ -1,3 +1,4 @@
+import { formatLogTimestamp } from "@guardbot/shared";
 import {
   ButtonStyle,
   ChannelType,
@@ -141,7 +142,7 @@ export async function buildTranscript(channel: TextChannel): Promise<string> {
   const lines: string[] = [];
 
   for (const message of messages.values()) {
-    const stamp = message.createdAt.toISOString().replace("T", " ").slice(0, 19);
+    const stamp = formatLogTimestamp(message.createdAt);
     const content = message.content || "(no text content)";
     lines.push(`[${stamp}] ${message.author.tag}: ${content}`);
   }

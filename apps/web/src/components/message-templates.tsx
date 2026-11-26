@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDate } from "@guardbot/shared";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useActionState } from "react";
@@ -147,7 +148,7 @@ export function MessageTemplates({
                     {template.content || template.embedDescription || template.embedTitle}
                   </span>
                   <span className="mt-3 block text-xs text-slate-600">
-                    Updated {new Date(template.updatedAt).toLocaleDateString()}
+                    Updated {formatDate(template.updatedAt)}
                   </span>
                 </button>
                 <div className="mt-4 border-t border-white/[0.06] pt-3">

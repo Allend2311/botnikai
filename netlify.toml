@@ -1,3 +1,5 @@
+"$schema" = "https://open-api.netlify.com/netlify.schema.json"
+
 [build]
   command = "npm run build:shared && npm run db:generate && npm --workspace @guardbot/web run build"
   publish = "apps/web/.next"
@@ -10,3 +12,6 @@
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
+
+[[plugins]]
+  package = "./netlify/plugins/guardbot-deploy"

@@ -1,3 +1,4 @@
+import { formatDateTime } from "@guardbot/shared";
 import { OwnerChrome } from "@/components/owner-chrome";
 import { PageHeader } from "@/components/page-header";
 import { Badge, Card, EmptyState, Stat } from "@/components/ui";
@@ -5,11 +6,6 @@ import { getSessionUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
-
-const dateFormat = new Intl.DateTimeFormat("en-US", {
-  dateStyle: "medium",
-  timeStyle: "short",
-});
 
 export default async function OwnerSecurityPage() {
   const user = await getSessionUser();
@@ -63,7 +59,7 @@ export default async function OwnerSecurityPage() {
                     <th className="pb-3 pr-4 font-medium">IP address</th>
                     <th className="pb-3 pr-4 font-medium">Type</th>
                     <th className="pb-3 pr-4 font-medium">Device</th>
-                    <th className="pb-3 font-medium">When</th>
+                    <th className="pb-3 font-medium">When (PH time)</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/[0.06]">
@@ -84,7 +80,7 @@ export default async function OwnerSecurityPage() {
                       <td className="max-w-[14rem] truncate py-2.5 pr-4 text-slate-500" title={event.userAgent ?? ""}>
                         {event.userAgent ?? "—"}
                       </td>
-                      <td className="whitespace-nowrap py-2.5 text-slate-500">{dateFormat.format(event.createdAt)}</td>
+                      <td className="whitespace-nowrap py-2.5 text-slate-500">{formatDateTime(event.createdAt)}</td>
                     </tr>
                   ))}
                 </tbody>

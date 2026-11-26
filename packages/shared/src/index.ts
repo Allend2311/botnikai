@@ -261,6 +261,57 @@ export function truncate(text: string, max = 200): string {
   return text.length <= max ? text : `${text.slice(0, max - 1)}…`;
 }
 
+/** All user-facing timestamps are displayed in Philippine Time (UTC+8). */
+export const APP_TIME_ZONE = "Asia/Manila";
+
+const dateTimeFormatter = new Intl.DateTimeFormat("en-US", {
+  dateStyle: "medium",
+  timeStyle: "short",
+  timeZone: APP_TIME_ZONE,
+});
+
+const dateFormatter = new Intl.DateTimeFormat("en-US", {
+  dateStyle: "medium",
+  timeZone: APP_TIME_ZONE,
+});
+
+const logFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: APP_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hour12: false,
+});
+
+type DateInput = Date | string | number;
+
+function asDate(value: DateInput): Date {
+  return value instanceof Date ? value : new Date(value);
+}
+
+/** e.g. `Nov 26, 2026, 8:06 PM` in Philippine Time. */
+export function formatDateTime(value: DateInput): string {
+  return dateTimeFormatter.format(asDate(value));
+}
+
+/** e.g. `Nov 26, 2026` in Philippine Time. */
+export function formatDate(value: DateInput): string {
+  return dateFormatter.format(asDate(value));
+}
+
+/** `YYYY-MM-DD HH:mm:ss` in Philippine Time, for logs and transcripts. */
+export function formatLogTimestamp(value: DateInput = new Date()): string {
+  const parts = Object.fromEntries(
+    logFormatter.formatToParts(asDate(value)).map(({ type, value: part }) => [type, part]),
+  );
+  // Some Intl implementations use hour "24" for midnight with hour12: false.
+  const hour = parts.hour === "24" ? "00" : parts.hour;
+  return `${parts.year}-${parts.month}-${parts.day} ${hour}:${parts.minute}:${parts.second}`;
+}
+
 export function relativeTime(date: Date | string): string {
   const value = typeof date === "string" ? new Date(date) : date;
   const diff = value.getTime() - Date.now();

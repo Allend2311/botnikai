@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { formatDateTime } from "@guardbot/shared";
 import { OwnerChrome } from "@/components/owner-chrome";
 import { PageHeader } from "@/components/page-header";
 import { Badge, Card, EmptyState, Stat } from "@/components/ui";
@@ -7,11 +8,6 @@ import { getSessionUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
-
-const dateFormat = new Intl.DateTimeFormat("en-US", {
-  dateStyle: "medium",
-  timeStyle: "short",
-});
 
 export default async function OwnerOverviewPage() {
   const user = await getSessionUser();
@@ -87,7 +83,7 @@ export default async function OwnerOverviewPage() {
             Train a classifier from {sampleCount.toLocaleString()} removed-message samples, {caseCount.toLocaleString()} moderation cases and {warningCount.toLocaleString()} warnings, then test it on new text.
           </p>
           <p className="mt-4 font-mono text-[10px] uppercase tracking-[0.14em] text-slate-600">
-            {model ? `Last trained ${dateFormat.format(model.trainedAt)}` : "Not trained yet"}
+            {model ? `Last trained ${formatDateTime(model.trainedAt)}` : "Not trained yet"}
           </p>
         </Link>
       </div>
@@ -107,7 +103,7 @@ export default async function OwnerOverviewPage() {
                     <th className="pb-3 pr-4 font-medium">User</th>
                     <th className="pb-3 pr-4 font-medium">IP address</th>
                     <th className="pb-3 pr-4 font-medium">Type</th>
-                    <th className="pb-3 font-medium">When</th>
+                    <th className="pb-3 font-medium">When (PH time)</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/[0.06]">
@@ -122,7 +118,7 @@ export default async function OwnerOverviewPage() {
                           {event.kind.toLowerCase()}
                         </Badge>
                       </td>
-                      <td className="py-2.5 text-slate-500">{dateFormat.format(event.createdAt)}</td>
+                      <td className="py-2.5 text-slate-500">{formatDateTime(event.createdAt)}</td>
                     </tr>
                   ))}
                 </tbody>

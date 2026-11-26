@@ -24,6 +24,8 @@ The database is **Prisma Postgres** — the bot and the dashboard share it.
 | **Dashboard** | Discord OAuth2 login, server picker, pages for every setting, and a live bot online/offline indicator. |
 | **Owner admin area** | Private `/owner` tools: sign-in IP history for signed-in users and an on-demand moderation text classifier trained on removed messages. |
 
+All user-facing timestamps on the site, in bot logs and in ticket transcripts are displayed in **Philippine Time** (`Asia/Manila`, UTC+8). Dates are stored as normal UTC instants in the database; only the display is converted. Discord `<t:...>` timestamps in embeds still follow each viewer's own Discord timezone setting.
+
 ---
 
 ## Project structure
@@ -218,6 +220,18 @@ Bot and database scripts:
 | `npm run db:deploy` | Apply the checked-in migrations |
 | `npm run db:status` | Show which migrations are applied |
 | `npm run db:migrate` | Create a new migration (needs a local PostgreSQL) |
+
+---
+
+## Netlify deployment and patch notes
+
+Every Netlify build generates a plain-text `PATCHNOTES.txt` in the repository
+root and publishes the same notes at
+[`https://kaibots.netlify.app/patchnotes.txt`](https://kaibots.netlify.app/patchnotes.txt).
+The notes use the deployed commit's subject and body, commit ID, and Philippine
+date. Download or open the text file and paste it into `/broadcast send` when
+you want to announce an update. To generate it locally, run
+`npm run patchnotes:generate`.
 
 ---
 

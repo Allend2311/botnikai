@@ -24,3 +24,7 @@ coverage/
 
 # Local Netlify folder
 .netlify
+
+# Generated during each Netlify build
+PATCHNOTES.txt
+apps/web/public/patchnotes.txt

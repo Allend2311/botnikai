@@ -1,3 +1,4 @@
+import { formatDateTime } from "@guardbot/shared";
 import { notFound } from "next/navigation";
 import { Badge, Card, EmptyState } from "@/components/ui";
 import { getGuildContext, roleOptions } from "@/lib/guild";
@@ -108,7 +109,7 @@ export default async function RoleRequestsPage({
                       <div>
                         <h2 className="font-semibold text-white">Role Request</h2>
                         <p className="mt-1 text-xs text-slate-500">
-                          Submitted {new Date(request.createdAt).toLocaleString()}
+                          Submitted {formatDateTime(request.createdAt)}
                         </p>
                       </div>
                       <Badge tone={status.tone}>{status.label}</Badge>

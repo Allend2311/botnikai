@@ -11,6 +11,7 @@
     "dev": "npm run build:shared && concurrently -n bot,web -c cyan,magenta \"npm:dev:bot\" \"npm:dev:web\"",
     "dev:bot": "npm run dev -w @guardbot/bot",
     "dev:web": "npm run dev -w @guardbot/web",
+    "patchnotes:generate": "node scripts/generate-patchnotes.js",
     "build": "npm run build:shared && npm run build:bot && npm run build:web",
     "build:shared": "npm run build -w @guardbot/shared",
     "build:bot": "npm run build -w @guardbot/bot",
