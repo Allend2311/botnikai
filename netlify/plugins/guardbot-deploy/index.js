@@ -17,7 +17,8 @@ const publishedPatchnotes = path.join(root, "apps", "web", ".next", "patchnotes.
 
 function fixWindowsRuntimePaths() {
   if (!fs.existsSync(serverHandler)) {
-    throw new Error(`Netlify Next.js server handler was not generated: ${serverHandler}`);
+    console.log("Skipping Windows path normalization; Netlify Next.js server handler was not generated at this stage.");
+    return;
   }
 
   const original = fs.readFileSync(serverHandler, "utf8");
